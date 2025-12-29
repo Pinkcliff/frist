@@ -1,0 +1,236 @@
+# Python 缓存文件
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 分发 / 打包
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# 单元测试 / 覆盖率报告
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# 翻译
+*.mo
+*.pot
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask
+instance/
+.webassets-cache
+
+# Scrapy
+.scrapy
+
+# Sphinx 文档
+docs/_build/
+
+# PyBuilder
+.pybuilder/
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# poetry
+poetry.lock
+
+# PEP 582
+__pypackages__/
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath
+*.sage.py
+
+# 环境变量
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder
+.spyderproject
+.spyproject
+
+# Rope
+.ropeproject
+
+# mkdocs
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre
+.pyre/
+
+# pytype static type analyzer
+.pytype/
+
+# Cython debug symbols
+cython_debug/
+
+# PyCharm
+.idea/
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# 操作系统文件
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# 临时文件
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# 日志文件
+*.log
+logs/
+
+# 编译文件
+*.com
+*.class
+*.dll
+*.exe
+*.o
+*.so
+*.pyd
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# 数据文件（但保留特定格式）
+*.dat
+*.bin
+*.bin2
+*.bak
+*.backup
+*.old
+*.orig
+*.rej
+
+# 大型数据集和模型文件
+*.h5
+*.hdf5
+*.pkl
+*.pickle
+*.model
+*.weights
+
+# CFD 特定文件
+*.msh
+*.cas
+*.dat
+*.res
+*.trk
+*.his
+*.fms
+*.fwh
+*.out
+*.err
+
+# 但保留以下文件类型
+!*.png
+!*.jpg
+!*.jpeg
+!*.gif
+!*.bmp
+!*.svg
+!*.ico
+!*.vtm
+!*.vtp
+!*.vtk
+!*.txt
+!*.json
+!*.csv
+!*.md
+!*.rst
+
+# 保留特定的配置文件
+!CLAUDE.md
+!README.md
+!.gitignore
+
+# 保留CFD项目文件
+!project.vtm
+!project/
+!*.vtm
+!*.vtp
+
+# 保留风扇数据文件
+!fan_curve_*.txt
+
+# 保留CSV输出文件
+!csv_outputs/
+!csv_outputs/*.csv
+
+# 忽略大型结果文件但保留源数据
+results/output_*
+simulation/results_*
+*.out.*
