@@ -1,0 +1,223 @@
+========================================
+  微小型无人机智能风场测试评估系统
+           环境配置信息
+========================================
+
+生成时间: 2025-12-30
+项目路径: F:\A-User\cliff\frist\frist
+
+----------------------------------------
+一、Python 环境信息
+----------------------------------------
+
+Python 版本: 3.11.13
+Python 解释器: D:\ProgramData\Anaconda3\envs\my_env\python.exe
+Conda 环境: my_env
+操作系统: Windows (MSC v.1929 64 bit AMD64)
+
+----------------------------------------
+二、已安装的 Python 包
+----------------------------------------
+
+Package                      Version
+---------------------------- -------
+certifi                      2025.11.12
+charset-normalizer           3.4.4
+colorama                     0.4.6
+contourpy                    1.3.3
+cycler                       0.12.1
+fonttools                    4.61.1
+idna                         3.11
+kiwisolver                   1.4.9
+matplotlib                   3.10.8
+narwhals                     2.14.0
+numpy                        2.3.5
+packaging                    25.0
+pandas                       2.3.3
+pillow                       12.0.0
+pip                          25.2
+platformdirs                 4.5.1
+plotly                       6.5.0
+pooch                        1.8.2
+pyparsing                    3.2.5
+pyqtgraph                    0.14.0
+pyserial                     3.5
+PySide6                      6.10.1
+PySide6_Addons               6.10.1
+PySide6_Essentials           6.10.1
+python-dateutil              2.9.0.post0
+pytz                         2025.2
+pyvista                      0.46.4
+pyvistaqt                    0.11.3
+QtPy                         2.4.3
+redis                        7.1.0
+requests                     2.32.5
+scooby                       0.11.0
+setuptools                   80.9.0
+shiboken6                    6.10.1
+six                          1.17.0
+typing_extensions            4.15.0
+tzdata                       2025.3
+urllib3                      2.6.2
+vtk                          9.5.2
+wheel                        0.45.1
+
+----------------------------------------
+三、项目核心依赖分类
+--------------------------------========
+
+【UI 框架】
+  - PySide6 (6.10.1)         Qt6 for Python，用于GUI界面
+  - PySide6_Addons (6.10.1)  PySide6 附加组件
+  - PySide6_Essentials       PySide6 核心组件
+  - shiboken6 (6.10.1)       PySide6 的底层绑定生成器
+
+【3D 可视化】
+  - pyvista (0.46.4)         3D 可视化库，用于风扇阵列显示
+  - pyvistaqt (0.11.3)       PyVista 的 Qt 集成
+  - vtk (9.5.2)              Visualization Toolkit，底层3D渲染引擎
+
+【图表绘制】
+  - pyqtgraph (0.14.0)       高性能科学绘图库
+  - matplotlib (3.10.8)      经典绘图库
+  - plotly (6.5.0)           交互式图表库
+
+【数值计算】
+  - numpy (2.3.5)            数组计算和科学计算核心库
+  - pandas (2.3.3)           数据处理和分析
+
+【数据处理与可视化】
+  - pillow (12.0.0)          Python 图像处理库
+  - contourpy (1.3.3)        等高线计算
+
+【通信】
+  - redis (7.1.0)            Redis 数据库客户端
+  - requests (2.32.5)        HTTP 请求库
+  - pyserial (3.5)           串口通信库
+
+【其他依赖】
+  - certifi                  SSL 证书验证
+  - charset-normalizer       字符编码检测
+  - colorama                 终端颜色输出
+  - idna                     国际化域名处理
+  - urllib3                  HTTP 客户端
+  - python-dateutil          日期时间处理
+  - pytz                     时区处理
+  - typing_extensions        类型提示扩展
+
+----------------------------------------
+四、项目导入的模块
+--------------------------------========
+
+【标准库】
+  - sys           系统相关参数和函数
+  - os            操作系统接口
+  - random        随机数生成
+  - math          数学函数
+  - time          时间相关函数
+  - datetime      日期时间处理
+  - csv           CSV 文件读写
+  - zipfile       ZIP 文件处理
+  - tempfile      临时文件/目录创建
+  - multiprocessing 多进程支持
+  - functools     高阶函数和可调用对象上的操作
+
+【第三方库】
+  - PySide6.QtWidgets    Qt GUI 组件
+  - PySide6.QtCore       Qt 核心功能
+  - PySide6.QtGui        Qt GUI 功能
+  - PySide6.QtCharts     Qt 图表组件
+  - numpy                数值计算
+  - pandas               数据处理
+  - pyvista              3D 可视化
+  - pyvistaqt            PyVista Qt 集成
+  - pyqtgraph            科学绘图
+  - vtk                  3D 渲染引擎
+
+----------------------------------------
+五、项目启动方式
+----------------------------------------
+
+1. 仪表盘程序（主入口）:
+   python main.py
+
+2. 前处理程序（独立运行）:
+   python 前处理/main.py
+
+3. 风场设置程序（独立运行）:
+   python 风场设置/main.py
+
+----------------------------------------
+六、Conda 环境管理
+----------------------------------------
+
+Conda 安装路径: D:\ProgramData\Anaconda3
+当前环境: my_env
+环境路径: D:\ProgramData\Anaconda3\envs\my_env
+其他可用环境:
+  - esp32
+  - gpu_pytorch
+  - my_env (当前)
+
+激活环境命令:
+  conda activate my_env
+
+ deactivate 环境命令:
+  conda deactivate
+
+----------------------------------------
+七、系统支持协议
+----------------------------------------
+
+通信协议              用途
+--------------------  ----------------------------------------
+TCP/IP               主控制器通信
+EtherCAT             电驱、风速传感、温度传感、湿度传感
+Modbus               俯仰伺服、造雨、喷雾、电力
+API                  动捕、训练、仿真
+
+----------------------------------------
+八、已知问题
+----------------------------------------
+
+1. 代码重复问题:
+   - 文件: 仪表盘/ui_docks.py
+   - 问题: 存在严重的函数重复定义
+
+2. 模块缺失:
+   - 求解器模块未找到，仿真功能受限
+
+3. 路径依赖:
+   - 图片资源使用相对路径加载
+
+4. 功能未实现:
+   - 部分文件操作功能尚未完成
+
+----------------------------------------
+九、建议的 pip 安装命令
+----------------------------------------
+
+# 安装 UI 框架
+pip install PySide6==6.10.1
+
+# 安装 3D 可视化
+pip install pyvista==0.46.4 pyvistaqt==0.11.3 vtk==9.5.2
+
+# 安装图表库
+pip install pyqtgraph==0.14.0 matplotlib==3.10.8 plotly==6.5.0
+
+# 安装数值计算
+pip install numpy==2.3.5 pandas==2.3.3
+
+# 安装通信库
+pip install redis==7.1.0 requests==2.32.5 pyserial==3.5
+
+----------------------------------------
+十、联系方式
+----------------------------------------
+
+如有环境配置问题，请联系项目维护人员。
+
+========================================
+           文档结束
+========================================

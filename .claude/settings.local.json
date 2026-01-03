@@ -2,7 +2,20 @@
   "permissions": {
     "allow": [
       "Bash(find:*)",
-      "Bash(pip install:*)"
+      "Bash(pip install:*)",
+      "Bash(python:*)",
+      "Bash(conda run:*)",
+      "mcp__mcp-all-in-one__filesystem__list_directory",
+      "mcp__mcp-all-in-one__filesystem__list_allowed_directories",
+      "Bash(findstr:*)",
+      "Bash(where:*)",
+      "Bash(\"D:\\\\ProgramData\\\\Anaconda3\\\\Scripts\\\\conda.exe\" run -n my_env python -c \"import sys; print\\(f''Python版本: {sys.version}''\\)\")",
+      "Bash(\"D:\\\\ProgramData\\\\Anaconda3\\\\Library\\\\bin\\\\conda.bat\":*)",
+      "Bash(dir:*)",
+      "Bash(\"D:\\\\ProgramData\\\\Anaconda3\\\\envs\\\\my_env\\\\python.exe\":*)",
+      "mcp__mcp-all-in-one__filesystem__directory_tree",
+      "Bash(timeout:*)",
+      "Bash(\"D:\\\\ProgramData\\\\Anaconda3\\\\envs\\\\my_env\\\\python.exe\" -m py_compile 前处理/CFD_module/pre_processor_window.py)"
     ],
     "deny": [],
     "ask": []
