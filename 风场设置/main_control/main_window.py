@@ -22,7 +22,8 @@ from .floating_windows import (
     TimeSettingsWindow, TemplateLibraryWindow, InfoWindow,
     CircleToolWindow, LineToolWindow, FunctionToolWindow
 )
-from .enhanced_function_tool import EnhancedFunctionToolWindow 
+from .enhanced_function_tool import EnhancedFunctionToolWindow
+from .function_3d_view import Function3DView 
 
 class MainWindow(QMainWindow):
     """重新设计的主窗口，包含右侧Dock面板和工具模式切换"""
@@ -50,14 +51,8 @@ class MainWindow(QMainWindow):
         self.runtime_timer.timeout.connect(self._update_runtime_display)
         # self.runtime_timer.start()
 
-        # 函数预览动画计时器
-        self.animation_timer = QTimer(self)
-        self.animation_timer.setInterval(50)  # 50ms一帧，20fps
-        self.animation_timer.timeout.connect(self._update_animation_frame)
-        self.animation_params = None  # 存储动画参数 (function_type, params, start_time)
-        self.animation_start_time = None
-        self.animation_duration = 5.0  # 动画持续5秒
-        self.original_grid_data = None  # 存储动画前的网格数据
+        # 函数动画相关参数（使用时间轴驱动）
+        self.current_function_params = None  # 存储当前函数参数 (function_type, params)
 
         # 初始化工具面板
         self._init_tool_widgets()
@@ -86,6 +81,9 @@ class MainWindow(QMainWindow):
         self.fan_settings_window = FanSettingsWindow(self)
         self.time_settings_window = TimeSettingsWindow(self)
         self.template_window = TemplateLibraryWindow(self)
+
+        # 3D函数视图
+        self.function_3d_view = Function3DView(self)
 
         # 设置初始值
         self.fan_settings_window.set_max_rpm(self.max_rpm)
@@ -122,12 +120,16 @@ class MainWindow(QMainWindow):
         central_layout.setStretch(1, 0) # 时间轴不可伸缩
         self.timeline_widget.setMaximumHeight(80) # 设置一个最大高度
 
-        # --- 右侧Dock面板 (代码与之前相同) ---
+        # --- 右侧Dock面板 ---
         right_dock = QDockWidget("工具与信息", self)
         right_dock.setAllowedAreas(Qt.RightDockWidgetArea)
-        
+        right_dock.setMinimumWidth(400)  # 设置Dock最小宽度
+
         dock_container = QWidget()
+        dock_container.setMinimumWidth(400)  # 设置容器最小宽度
         dock_layout = QVBoxLayout(dock_container)
+        dock_layout.setContentsMargins(5, 5, 5, 5)
+        dock_layout.setSpacing(5)
         
         # 1. 工具模式面板
         self.tool_mode_group = QGroupBox("点选模式")
@@ -161,19 +163,25 @@ class MainWindow(QMainWindow):
         status_layout.addRow("运行时间:", self.fan_runtime_label)
         status_group.setLayout(status_layout)
 
-        # 3. 系统信息面板
+        # 3. 系统信息面板（限制高度）
         info_group = QGroupBox("系统信息")
+        info_group.setMaximumHeight(200)  # 限制最大高度
         info_layout = QVBoxLayout()
         self.info_output = QTextEdit()
         self.info_output.setReadOnly(True)
         self.info_output.append("系统就绪...")
         info_layout.addWidget(self.info_output)
         info_group.setLayout(info_layout)
-        
-        # 将三个部分添加到Dock容器中，并设置比例
-        dock_layout.addWidget(self.tool_mode_group, 15)
-        dock_layout.addWidget(status_group, 10)
-        dock_layout.addWidget(info_group, 10)
+
+        # 将三个部分添加到Dock容器中（移除嵌入式3D视图）
+        dock_layout.addWidget(self.tool_mode_group, 12)
+        dock_layout.addWidget(status_group, 8)
+        dock_layout.addWidget(info_group, 5)
+
+        # 设置stretch因子
+        dock_layout.setStretch(0, 12)
+        dock_layout.setStretch(1, 8)
+        dock_layout.setStretch(2, 5)
 
         right_dock.setWidget(dock_container)
         self.addDockWidget(Qt.RightDockWidgetArea, right_dock)
@@ -291,6 +299,7 @@ class MainWindow(QMainWindow):
         self.tool_time_action = QAction(QIcon(os.path.join(icon_path, "时间设置.png")), "时间", self)
         self.tool_template_action = QAction(QIcon(os.path.join(icon_path, "模板库.png")), "模板", self)
         self.tool_sim_action = QAction(QIcon(os.path.join(icon_path, "仿真分析1.png")), "仿真", self)
+        self.tool_3d_view_action = QAction(QIcon(os.path.join(icon_path, "fx.png")), "3D视图", self)  # 暂时使用fx图标
 
         toolbar.addAction(self.tool_open_action)
         toolbar.addAction(self.tool_save_action)
@@ -310,6 +319,8 @@ class MainWindow(QMainWindow):
         toolbar.addAction(self.tool_template_action)
         toolbar.addSeparator()
         toolbar.addAction(self.tool_sim_action)
+        toolbar.addSeparator()
+        toolbar.addAction(self.tool_3d_view_action)
 
     @Slot(float)
     def _apply_speed_to_selected_fans(self, speed):
@@ -422,7 +433,8 @@ class MainWindow(QMainWindow):
         self.menu_template_library_action.triggered.connect(self._show_template_library)
         self.tool_template_action.triggered.connect(self._show_template_library)
         self.menu_debug_mode_action.toggled.connect(self._toggle_debug_mode)
-        
+        self.tool_3d_view_action.triggered.connect(self._show_3d_view)
+
         # 笔刷widget参数变化信号
         self.brush_widget.brush_size_spinbox.valueChanged.connect(self.canvas_widget.update_brush_preview)
         self.brush_widget.brush_value_input.textChanged.connect(self.canvas_widget.update_brush_preview)
@@ -495,7 +507,13 @@ class MainWindow(QMainWindow):
     def _show_template_library(self):
         self.template_window.show()
         self.template_window.raise_()
-        
+
+    @Slot()
+    def _show_3d_view(self):
+        """打开3D视图窗口"""
+        self.function_3d_view.open_3d_window()
+        self._add_info_message("已打开3D函数视图窗口")
+
     @Slot()
     def _function_generator_placeholder(self):
         self._add_info_message("函数生成器功能暂未实现")
@@ -561,6 +579,14 @@ class MainWindow(QMainWindow):
             self._add_info_message(f"  最大值: {stats.max():.2f}%, 最小值: {stats.min():.2f}%")
             self._add_info_message(f"  平均值: {stats.mean():.2f}%")
 
+            # 更新3D视图
+            self.function_3d_view.set_grid_data(result_grid)
+            self.function_3d_view.current_function = function_type
+            self.function_3d_view.current_time = time_value
+
+            # 保存当前函数参数供时间轴使用
+            self.current_function_params = (function_type, params)
+
         except ImportError as e:
             self._add_info_message(f"错误: 无法导入wind_field_editor模块: {e}")
             self._add_info_message("请确保wind_field_editor模块在项目根目录")
@@ -573,65 +599,32 @@ class MainWindow(QMainWindow):
     @Slot(str, dict)
     def _preview_function_animation(self, function_type: str, params: dict):
         """
-        预览函数动画
+        预览函数动画 - 使用时间轴的时间
 
         Args:
             function_type: 函数类型
             params: 函数参数
         """
         try:
-            # 保存当前网格数据
-            self.original_grid_data = np.copy(self.canvas_widget.grid_data)
+            # 保存当前函数参数供时间轴使用
+            self.current_function_params = (function_type, params)
 
-            # 存储动画参数
-            self.animation_params = (function_type, params)
-            self.animation_start_time = datetime.now()
+            # 使用时间轴的当前时间应用函数
+            current_time = self.timeline_widget.get_current_time()
+            result_grid = self._apply_function_without_undo(function_type, params, current_time)
 
-            # 开始动画
-            self.animation_timer.start()
-            self._add_info_message(f"开始预览动画: {function_type}")
-            self._add_info_message(f"参数: {params}")
+            # 更新3D视图
+            if result_grid is not None:
+                self.function_3d_view.set_grid_data(result_grid)
+                self.function_3d_view.current_function = function_type
+                self.function_3d_view.current_time = current_time
 
-        except Exception as e:
-            self._add_info_message(f"启动动画失败: {e}")
-            import traceback
-            traceback.print_exc()
-
-    @Slot()
-    def _update_animation_frame(self):
-        """更新动画帧"""
-        if self.animation_params is None:
-            return
-
-        try:
-            function_type, params = self.animation_params
-
-            # 计算当前动画时间
-            elapsed = (datetime.now() - self.animation_start_time).total_seconds()
-            time_value = elapsed
-
-            # 检查动画是否结束
-            if time_value >= self.animation_duration:
-                self.animation_timer.stop()
-                self._add_info_message("动画预览结束")
-                # 恢复原始数据
-                if self.original_grid_data is not None:
-                    self.canvas_widget.grid_data = self.original_grid_data
-                    self.canvas_widget.update_all_cells_from_data()
-                    self.canvas_widget.update()
-                self.animation_params = None
-                return
-
-            # 应用函数（不保存到撤销栈）
-            self._apply_function_without_undo(function_type, params, time_value)
-
-            # 更新信息显示
-            if int(elapsed * 10) % 5 == 0:  # 每0.5秒更新一次信息
-                self._add_info_message(f"动画时间: {time_value:.2f}s / {self.animation_duration:.1f}s")
+            self._add_info_message(f"函数已激活: {function_type}")
+            self._add_info_message(f"拖动时间轴可查看动画效果")
+            self._add_info_message(f"时间范围: 0 - {self.max_time:.1f}秒")
 
         except Exception as e:
-            self.animation_timer.stop()
-            self._add_info_message(f"动画更新失败: {e}")
+            self._add_info_message(f"启动函数失败: {e}")
             import traceback
             traceback.print_exc()
 
@@ -668,10 +661,14 @@ class MainWindow(QMainWindow):
             self.canvas_widget.update_all_cells_from_data()
             self.canvas_widget.update()
 
+            # 返回结果网格供3D视图使用
+            return result_grid
+
         except Exception as e:
             self._add_info_message(f"应用函数失败: {e}")
             import traceback
             traceback.print_exc()
+            return None
 
     @Slot()
     def _apply_fan_settings(self):
@@ -697,6 +694,19 @@ class MainWindow(QMainWindow):
         
     @Slot(float)
     def _on_time_changed(self, time_value):
+        """时间轴时间变化时更新函数动画"""
+        # 如果有当前的函数参数，根据时间更新函数
+        if hasattr(self, 'current_function_params') and self.current_function_params:
+            function_type, params = self.current_function_params
+
+            # 应用函数并获取网格数据
+            result_grid = self._apply_function_without_undo(function_type, params, time_value)
+
+            # 更新3D视图
+            if result_grid is not None:
+                self.function_3d_view.set_grid_data(result_grid)
+                self.function_3d_view.current_time = time_value
+
         if self.debug_mode:
             self._add_info_message(f"时间设置为: {time_value:.2f}s")
         
