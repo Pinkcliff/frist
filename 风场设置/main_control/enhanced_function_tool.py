@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
     QGroupBox, QLabel, QPushButton, QComboBox, QDoubleSpinBox,
     QSpinBox, QCheckBox, QSlider, QTabWidget, QWidget,
-    QListWidget, QListWidgetItem, QSplitter
+    QListWidget, QListWidgetItem, QSplitter, QTextEdit
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QDoubleValidator
@@ -317,6 +317,18 @@ class EnhancedFunctionToolWindow(QDialog):
             'noise_field': 'z = 噪声函数 + 随机扰动',
             'polynomial_surface': 'z = (x^3 - 3xy^2) / 10',
             'saddle_point': 'z = (x^2 - y^2) / 5',
+            # 新增函数公式
+            'hyperbolic_paraboloid': 'z = (x^2 - y^2) / 4',
+            'elliptic_paraboloid': 'z = (x^2 + y^2) / 8',
+            'ripple': 'z = sin(r * 0.5 - t*2) / (r * 0.2 + 1)',
+            'rose_curve': 'z = cos(k*theta + t) * exp(-r^2/200)',
+            'lissajous': 'z = sin(a*x + t) * sin(b*y + t)',
+            'heart_shape': 'z = -(x^2 + y^2 - 1)^3 + x^2*y^3',
+            'butterfly_curve': 'z = (exp(cos(θ)) - 2*cos(4θ) + sin(θ/12)^5)',
+            'archimedean_spiral': 'z = cos(10*(r - (a + b*θ))) * exp(-0.1*r)',
+            'torus': 'z = exp(-(R - sqrt(x^2 + y^2))^2 / (2*r^2))',
+            'sombrero': 'z = sin(r) / r',
+            'custom_expression': '输入自定义表达式，变量: x, y, t',
         }
         return formulas.get(func_name, "公式未定义")
 
@@ -337,12 +349,13 @@ class EnhancedFunctionToolWindow(QDialog):
             self.sigma_spinbox = sigma_spinbox
             self.specific_params_layout.addRow("标准差:", sigma_spinbox)
 
-        elif func_name in ['spiral_wave']:
+        elif func_name in ['spiral_wave', 'rose_curve']:
             arms_spinbox = QSpinBox()
             arms_spinbox.setRange(1, 10)
-            arms_spinbox.setValue(3)
+            arms_spinbox.setValue(5 if func_name == 'rose_curve' else 3)
             self.arms_spinbox = arms_spinbox
-            self.specific_params_layout.addRow("螺旋臂数:", arms_spinbox)
+            label = "花瓣数:" if func_name == 'rose_curve' else "螺旋臂数:"
+            self.specific_params_layout.addRow(label, arms_spinbox)
 
         elif func_name == 'radial_gradient':
             bands_spinbox = QSpinBox()
@@ -356,6 +369,51 @@ class EnhancedFunctionToolWindow(QDialog):
             direction_combo.addItems(['对角线', 'X方向', 'Y方向'])
             self.direction_combo = direction_combo
             self.specific_params_layout.addRow("渐变方向:", direction_combo)
+
+        elif func_name == 'lissajous':
+            # a参数
+            a_spinbox = QSpinBox()
+            a_spinbox.setRange(1, 10)
+            a_spinbox.setValue(3)
+            self.a_spinbox = a_spinbox
+            self.specific_params_layout.addRow("X频率:", a_spinbox)
+
+            # b参数
+            b_spinbox = QSpinBox()
+            b_spinbox.setRange(1, 10)
+            b_spinbox.setValue(2)
+            self.b_spinbox = b_spinbox
+            self.specific_params_layout.addRow("Y频率:", b_spinbox)
+
+        elif func_name == 'torus':
+            # R参数
+            r_spinbox = QDoubleSpinBox()
+            r_spinbox.setRange(1.0, 20.0)
+            r_spinbox.setValue(8.0)
+            self.r_spinbox = r_spinbox
+            self.specific_params_layout.addRow("大半径:", r_spinbox)
+
+        elif func_name == 'custom_expression':
+            # 自定义表达式输入框
+            expression_input = QTextEdit()
+            expression_input.setPlainText("z = sin(x) * cos(y + t)")
+            expression_input.setMaximumHeight(80)
+            expression_input.setStyleSheet("font-family: Consolas, monospace;")
+            self.expression_input = expression_input
+            self.specific_params_layout.addRow("表达式:", expression_input)
+
+            # 帮助提示
+            help_label = QLabel(
+                "可用变量: x, y, t\n"
+                "可用函数: sin, cos, tan, exp, log, sqrt, abs, power,\n"
+                "arcsin, arccos, arctan, sinh, cosh, tanh,\n"
+                "floor, ceil, round\n"
+                "常数: pi, e\n\n"
+                "提示: 可以输入 z = 表达式 或只输入表达式\n"
+                "示例: z = (x/5) * cos(t + y)"
+            )
+            help_label.setStyleSheet("color: #666; font-size: 11px; padding: 5px;")
+            self.specific_params_layout.addRow("", help_label)
 
         else:
             label = QLabel("无特定参数")
@@ -376,13 +434,22 @@ class EnhancedFunctionToolWindow(QDialog):
 
         if func_name == 'gaussian' and hasattr(self, 'sigma_spinbox'):
             params['sigma'] = self.sigma_spinbox.value()
-        elif func_name == 'spiral_wave' and hasattr(self, 'arms_spinbox'):
+        elif func_name in ['spiral_wave', 'rose_curve'] and hasattr(self, 'arms_spinbox'):
             params['arms'] = self.arms_spinbox.value()
         elif func_name == 'radial_gradient' and hasattr(self, 'bands_spinbox'):
             params['bands'] = self.bands_spinbox.value()
         elif func_name == 'linear_gradient' and hasattr(self, 'direction_combo'):
             direction_map = {'对角线': 'diagonal', 'X方向': 'x', 'Y方向': 'y'}
             params['direction'] = direction_map.get(self.direction_combo.currentText(), 'diagonal')
+        elif func_name == 'lissajous':
+            if hasattr(self, 'a_spinbox'):
+                params['a'] = self.a_spinbox.value()
+            if hasattr(self, 'b_spinbox'):
+                params['b'] = self.b_spinbox.value()
+        elif func_name == 'torus' and hasattr(self, 'r_spinbox'):
+            params['R'] = self.r_spinbox.value()
+        elif func_name == 'custom_expression' and hasattr(self, 'expression_input'):
+            params['expression'] = self.expression_input.toPlainText()
 
         return params
 
@@ -391,6 +458,24 @@ class EnhancedFunctionToolWindow(QDialog):
         params = self._get_function_params()
         time_value = self.time_spinbox.value()
 
+        # 对于自定义表达式，需要先设置表达式
+        if self.current_function == 'custom_expression' and 'expression' in params:
+            try:
+                from wind_field_editor.functions import CustomExpressionFunction, FunctionParams
+                func_params = FunctionParams(
+                    center=params['center'],
+                    amplitude=params['amplitude']
+                )
+                func = CustomExpressionFunction(func_params)
+                func.set_expression(params['expression'])
+                # 验证表达式
+                test_grid = np.zeros((40, 40))
+                func.apply(test_grid, time_value=0.0)
+                self._add_info_message(f"自定义表达式验证成功")
+            except Exception as e:
+                self._add_info_message(f"表达式错误: {e}")
+                return
+
         # 发送信号
         self.apply_function_signal.emit(self.current_function, params, time_value)
 
@@ -398,6 +483,10 @@ class EnhancedFunctionToolWindow(QDialog):
         print(f"[FunctionTool] 应用函数: {self.current_function}")
         print(f"[FunctionTool] 参数: {params}")
         print(f"[FunctionTool] 时间: {time_value}")
+
+    def _add_info_message(self, message: str):
+        """添加信息消息（用于显示在状态栏）"""
+        print(f"[FunctionTool] {message}")
 
     def _preview_function(self):
         """预览函数动画 - 发送动画信号到主窗口"""

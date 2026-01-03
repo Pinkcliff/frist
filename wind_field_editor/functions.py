@@ -647,12 +647,405 @@ class SaddlePointFunction(WindFieldFunction):
         return self.normalize(Z)
 
 
+# ==================== 新增函数 ====================
+
+class HyperbolicParaboloidFunction(WindFieldFunction):
+    """双曲抛物面函数（马鞍面）
+
+    公式: z = (x² - y²) / 4
+    适用场景: 经典马鞍面
+    """
+
+    def __init__(self, params: Optional[FunctionParams] = None):
+        self.params = params or FunctionParams()
+
+    def apply(self, grid_data: np.ndarray, time: float = 0.0) -> np.ndarray:
+        """应用双曲抛物面"""
+        self.validate_grid(grid_data)
+        rows, cols = grid_data.shape
+
+        x = np.linspace(-3, 3, cols)
+        y = np.linspace(-3, 3, rows)
+        X, Y = np.meshgrid(x, y, indexing='xy')
+
+        Z = (X ** 2 - Y ** 2) / 4 * np.cos(time * 0.5) if time > 0 else (X ** 2 - Y ** 2) / 4
+
+        Z = (Z + 2) / 4 * 100 * (self.params.amplitude / 100.0)
+        return self.normalize(Z)
+
+
+class EllipticParaboloidFunction(WindFieldFunction):
+    """椭圆抛物面函数
+
+    公式: z = (x² + y²) / 8
+    适用场景: 抛物碗
+    """
+
+    def __init__(self, params: Optional[FunctionParams] = None):
+        self.params = params or FunctionParams()
+
+    def apply(self, grid_data: np.ndarray, time: float = 0.0) -> np.ndarray:
+        """应用椭圆抛物面"""
+        self.validate_grid(grid_data)
+        rows, cols = grid_data.shape
+
+        x = np.linspace(-4, 4, cols)
+        y = np.linspace(-4, 4, rows)
+        X, Y = np.meshgrid(x, y, indexing='xy')
+
+        Z = (X ** 2 + Y ** 2) / 8 * np.sin(time * 0.3) if time > 0 else (X ** 2 + Y ** 2) / 8
+
+        Z = Z * 20 * (self.params.amplitude / 100.0)
+        return self.normalize(Z)
+
+
+class RippleFunction(WindFieldFunction):
+    """涟漪函数
+
+    公式: z = sin(r * frequency - time) / (r + 1)
+    适用场景: 水波涟漪
+    """
+
+    def __init__(self, params: Optional[FunctionParams] = None):
+        self.params = params or FunctionParams()
+        self.frequency = 3.0
+
+    def apply(self, grid_data: np.ndarray, time: float = 0.0) -> np.ndarray:
+        """应用涟漪效果"""
+        self.validate_grid(grid_data)
+        rows, cols = grid_data.shape
+
+        cr, cc = self.params.center
+        x = np.arange(cols)
+        y = np.arange(rows)
+        X, Y = np.meshgrid(x, y, indexing='xy')
+
+        R = np.sqrt((X - cc) ** 2 + (Y - cr) ** 2)
+
+        Z = np.sin(R * 0.5 - time * 2) / (R * 0.2 + 1)
+
+        Z = (Z + 1) / 2 * 100 * (self.params.amplitude / 100.0)
+        return self.normalize(Z)
+
+
+class RoseCurveFunction(WindFieldFunction):
+    """玫瑰曲线函数
+
+    公式: z = cos(k * θ) * exp(-r²/20)
+    适用场景: 玫瑰花瓣图案
+    """
+
+    def __init__(self, params: Optional[FunctionParams] = None):
+        self.params = params or FunctionParams()
+        self.petals = 5  # 花瓣数
+
+    def apply(self, grid_data: np.ndarray, time: float = 0.0) -> np.ndarray:
+        """应用玫瑰曲线"""
+        self.validate_grid(grid_data)
+        rows, cols = grid_data.shape
+
+        cr, cc = self.params.center
+        x = np.arange(cols)
+        y = np.arange(rows)
+        X, Y = np.meshgrid(x, y, indexing='xy')
+
+        R = np.sqrt((X - cc) ** 2 + (Y - cr) ** 2)
+        Theta = np.arctan2(Y - cr, X - cc)
+
+        Z = np.cos(self.petals * Theta + time) * np.exp(-R * R / 200)
+
+        Z = (Z + 1) / 2 * 100 * (self.params.amplitude / 100.0)
+        return self.normalize(Z)
+
+
+class LissajousFunction(WindFieldFunction):
+    """利萨如图形函数
+
+    公式: z = sin(a*x + t) * sin(b*y + t)
+    适用场景: 利萨如图案
+    """
+
+    def __init__(self, params: Optional[FunctionParams] = None):
+        self.params = params or FunctionParams()
+        self.a = 3  # x方向频率
+        self.b = 2  # y方向频率
+
+    def apply(self, grid_data: np.ndarray, time: float = 0.0) -> np.ndarray:
+        """应用利萨如图形"""
+        self.validate_grid(grid_data)
+        rows, cols = grid_data.shape
+
+        x = np.linspace(-np.pi, np.pi, cols)
+        y = np.linspace(-np.pi, np.pi, rows)
+        X, Y = np.meshgrid(x, y, indexing='xy')
+
+        Z = np.sin(self.a * X + time) * np.sin(self.b * Y + time * 0.7)
+
+        Z = (Z + 1) / 2 * 100 * (self.params.amplitude / 100.0)
+        return self.normalize(Z)
+
+
+class HeartShapeFunction(WindFieldFunction):
+    """心形线函数
+
+    公式: (x² + y² - 1)³ - x²*y³ = 0
+    适用场景: 心形图案
+    """
+
+    def __init__(self, params: Optional[FunctionParams] = None):
+        self.params = params or FunctionParams()
+
+    def apply(self, grid_data: np.ndarray, time: float = 0.0) -> np.ndarray:
+        """应用心形图案"""
+        self.validate_grid(grid_data)
+        rows, cols = grid_data.shape
+
+        cr, cc = self.params.center
+        x = np.arange(cols) - cc
+        y = np.arange(rows) - cr
+        X, Y = np.meshgrid(x, y, indexing='xy')
+
+        # 缩放坐标
+        scale = 0.15
+        X = X * scale
+        Y = Y * scale
+
+        # 心形方程
+        a = X ** 2 + Y ** 2 - 1
+        Z = -(a ** 3 - X ** 2 * Y ** 3) * 5
+
+        if time > 0:
+            pulse = 1 + 0.2 * np.sin(time * 2)
+            Z = Z * pulse
+
+        Z = np.clip(Z, -50, 50)
+        Z = (Z + 50) * (self.params.amplitude / 100.0)
+        return self.normalize(Z)
+
+
+class ButterflyCurveFunction(WindFieldFunction):
+    """蝴蝶曲线函数
+
+    公式: r = exp(cos(θ)) - 2*cos(4θ) + sin(θ/12)⁵
+    适用场景: 蝴蝶图案
+    """
+
+    def __init__(self, params: Optional[FunctionParams] = None):
+        self.params = params or FunctionParams()
+
+    def apply(self, grid_data: np.ndarray, time: float = 0.0) -> np.ndarray:
+        """应用蝴蝶曲线"""
+        self.validate_grid(grid_data)
+        rows, cols = grid_data.shape
+
+        cr, cc = self.params.center
+        x = np.arange(cols) - cc
+        y = np.arange(rows) - cr
+        X, Y = np.meshgrid(x, y, indexing='xy')
+
+        scale = 0.1
+        X = X * scale
+        Y = Y * scale
+
+        R = np.sqrt(X ** 2 + Y ** 2)
+        Theta = np.arctan2(Y, X)
+
+        # 蝴蝶曲线
+        r = np.exp(np.cos(Theta + time * 0.2)) - 2 * np.cos(4 * Theta + time) + np.sin((Theta + time) / 12) ** 5
+        Z = r * 10 * np.exp(-R)
+
+        Z = (Z + 20) / 40 * 100 * (self.params.amplitude / 100.0)
+        return self.normalize(Z)
+
+
+class ArchimedeanSpiralFunction(WindFieldFunction):
+    """阿基米德螺旋线函数
+
+    公式: r = a + b*θ
+    适用场景: 螺旋图案
+    """
+
+    def __init__(self, params: Optional[FunctionParams] = None):
+        self.params = params or FunctionParams()
+        self.a = 0.5
+        self.b = 0.3
+
+    def apply(self, grid_data: np.ndarray, time: float = 0.0) -> np.ndarray:
+        """应用阿基米德螺旋"""
+        self.validate_grid(grid_data)
+        rows, cols = grid_data.shape
+
+        cr, cc = self.params.center
+        x = np.arange(cols) - cc
+        y = np.arange(rows) - cr
+        X, Y = np.meshgrid(x, y, indexing='xy')
+
+        R = np.sqrt(X ** 2 + Y ** 2)
+        Theta = np.arctan2(Y, X)
+
+        # 阿基米德螺旋线
+        spiral_r = self.a + self.b * (Theta + time)
+        Z = np.cos(10 * (R - spiral_r)) * np.exp(-R * 0.1)
+
+        Z = (Z + 1) / 2 * 100 * (self.params.amplitude / 100.0)
+        return self.normalize(Z)
+
+
+class TorusFunction(WindFieldFunction):
+    """环面函数
+
+    公式: z = (R - sqrt(x² + y²))² + z²
+    适用场景: 环形图案
+    """
+
+    def __init__(self, params: Optional[FunctionParams] = None):
+        self.params = params or FunctionParams()
+        self.R = 8  # 大半径
+        self.r = 3  # 小半径
+
+    def apply(self, grid_data: np.ndarray, time: float = 0.0) -> np.ndarray:
+        """应用环面图案"""
+        self.validate_grid(grid_data)
+        rows, cols = grid_data.shape
+
+        cr, cc = self.params.center
+        x = np.arange(cols) - cc
+        y = np.arange(rows) - cr
+        X, Y = np.meshgrid(x, y, indexing='xy')
+
+        R = np.sqrt(X ** 2 + Y ** 2)
+
+        # 环面距离函数
+        dist = (R - self.R) ** 2
+        Z = np.exp(-dist / (2 * self.r ** 2))
+
+        if time > 0:
+            Z = Z * (1 + 0.3 * np.sin(time))
+
+        Z = Z * 100 * (self.params.amplitude / 100.0)
+        return self.normalize(Z)
+
+
+class SombreroFunction(WindFieldFunction):
+    """墨西哥草帽函数
+
+    公式: z = sinc(r) = sin(r)/r
+    适用场景: 墨西哥草帽曲面
+    """
+
+    def __init__(self, params: Optional[FunctionParams] = None):
+        self.params = params or FunctionParams()
+
+    def apply(self, grid_data: np.ndarray, time: float = 0.0) -> np.ndarray:
+        """应用墨西哥草帽"""
+        self.validate_grid(grid_data)
+        rows, cols = grid_data.shape
+
+        cr, cc = self.params.center
+        x = np.arange(cols) - cc
+        y = np.arange(rows) - cr
+        X, Y = np.meshgrid(x, y, indexing='xy')
+
+        R = np.sqrt(X ** 2 + Y ** 2)
+        R_scaled = R / 3.0
+
+        # sinc函数，避免除零
+        with np.errstate(divide='ignore', invalid='ignore'):
+            Z = np.where(R_scaled > 0, np.sin(R_scaled) / R_scaled, 1.0)
+
+        if time > 0:
+            Z = Z * (1 + 0.2 * np.cos(R_scaled - time))
+
+        Z = Z * 100 * (self.params.amplitude / 100.0)
+        return self.normalize(Z)
+
+
+class CustomExpressionFunction(WindFieldFunction):
+    """自定义表达式函数
+
+    允许用户输入数学表达式来定义曲面
+    支持的变量: x, y, t (时间)
+    支持的函数: sin, cos, tan, exp, log, sqrt, abs, power等
+    """
+
+    def __init__(self, params: Optional[FunctionParams] = None):
+        self.params = params or FunctionParams()
+        self.expression = "sin(x) * cos(y + t)"  # 默认表达式
+        self._compiled_expr = None
+
+    def set_expression(self, expression: str) -> None:
+        """设置数学表达式"""
+        # 自动处理 z = 前缀
+        expression = expression.strip()
+        if expression.lower().startswith('z ='):
+            expression = expression[3:].strip()
+        elif expression.lower().startswith('z='):
+            expression = expression[2:].strip()
+
+        self.expression = expression
+        self._compile_expression()
+
+    def _compile_expression(self):
+        """编译表达式"""
+        try:
+            # 创建安全的命名空间
+            safe_dict = {
+                'x': None, 'y': None, 't': None,
+                'sin': np.sin, 'cos': np.cos, 'tan': np.tan,
+                'exp': np.exp, 'log': np.log, 'log10': np.log10,
+                'sqrt': np.sqrt, 'abs': np.abs, 'power': np.power,
+                'pi': np.pi, 'e': np.e,
+                'arcsin': np.arcsin, 'arccos': np.arccos, 'arctan': np.arctan,
+                'sinh': np.sinh, 'cosh': np.cosh, 'tanh': np.tanh,
+                'floor': np.floor, 'ceil': np.ceil, 'round': np.round,
+            }
+            # 编译表达式
+            self._compiled_expr = compile(self.expression, '<string>', 'eval')
+            self._safe_dict = safe_dict
+        except Exception as e:
+            raise ValueError(f"表达式编译错误: {e}")
+
+    def apply(self, grid_data: np.ndarray, time: float = 0.0) -> np.ndarray:
+        """应用自定义表达式"""
+        self.validate_grid(grid_data)
+        rows, cols = grid_data.shape
+
+        if self._compiled_expr is None:
+            self._compile_expression()
+
+        cr, cc = self.params.center
+        x = np.arange(cols) - cc
+        y = np.arange(rows) - cr
+        X, Y = np.meshgrid(x, y, indexing='xy')
+
+        # 更新命名空间
+        self._safe_dict['x'] = X
+        self._safe_dict['y'] = Y
+        self._safe_dict['t'] = time
+
+        try:
+            # 计算表达式
+            Z = eval(self._compiled_expr, {'__builtins__': {}}, self._safe_dict)
+
+            # 归一化到 [0, 100]
+            Z_min, Z_max = Z.min(), Z.max()
+            if Z_max > Z_min:
+                Z = (Z - Z_min) / (Z_max - Z_min) * 100 * (self.params.amplitude / 100.0)
+            else:
+                Z = np.zeros_like(Z)
+
+            return self.normalize(Z)
+        except Exception as e:
+            print(f"表达式计算错误: {e}")
+            return np.zeros_like(grid_data)
+
+
 # ==================== 函数工厂 ====================
 
 class WindFieldFunctionFactory:
     """风场函数工厂
 
-    提供12种预定义函数模板的统一访问接口
+    提供25种预定义函数模板的统一访问接口
     """
 
     # 函数类型映射
@@ -671,15 +1064,30 @@ class WindFieldFunctionFactory:
         'noise_field': NoiseFieldFunction,
         'polynomial_surface': PolynomialSurfaceFunction,
         'saddle_point': SaddlePointFunction,
+        # 新增函数
+        'hyperbolic_paraboloid': HyperbolicParaboloidFunction,
+        'elliptic_paraboloid': EllipticParaboloidFunction,
+        'ripple': RippleFunction,
+        'rose_curve': RoseCurveFunction,
+        'lissajous': LissajousFunction,
+        'heart_shape': HeartShapeFunction,
+        'butterfly_curve': ButterflyCurveFunction,
+        'archimedean_spiral': ArchimedeanSpiralFunction,
+        'torus': TorusFunction,
+        'sombrero': SombreroFunction,
+        'custom_expression': CustomExpressionFunction,
     }
 
     # 函数分类
     CATEGORIES = {
-        '基础波形': ['simple_wave', 'radial_wave', 'standing_wave'],
+        '基础波形': ['simple_wave', 'radial_wave', 'standing_wave', 'ripple'],
         '高斯函数': ['gaussian', 'gaussian_packet'],
         '渐变图案': ['linear_gradient', 'circular_gradient', 'radial_gradient'],
-        '复杂波场': ['spiral_wave', 'interference', 'checkerboard', 'noise_field'],
-        '数学曲面': ['polynomial_surface', 'saddle_point'],
+        '复杂波场': ['spiral_wave', 'interference', 'checkerboard', 'noise_field', 'lissajous'],
+        '数学曲面': ['polynomial_surface', 'saddle_point', 'hyperbolic_paraboloid',
+                     'elliptic_paraboloid', 'sombrero', 'torus'],
+        '特殊曲线': ['rose_curve', 'heart_shape', 'butterfly_curve', 'archimedean_spiral'],
+        '自定义': ['custom_expression'],
     }
 
     # 函数描述
@@ -698,6 +1106,18 @@ class WindFieldFunctionFactory:
         'noise_field': '噪声场 - 随机扰动',
         'polynomial_surface': '多项式曲面 - 数学曲面',
         'saddle_point': '鞍点 - 鞍形分布',
+        # 新增函数描述
+        'hyperbolic_paraboloid': '双曲抛物面 - 经典马鞍面',
+        'elliptic_paraboloid': '椭圆抛物面 - 抛物碗',
+        'ripple': '涟漪 - 水波涟漪效果',
+        'rose_curve': '玫瑰曲线 - 花瓣图案',
+        'lissajous': '利萨如图形 - 复杂波形',
+        'heart_shape': '心形线 - 心形图案',
+        'butterfly_curve': '蝴蝶曲线 - 蝴蝶图案',
+        'archimedean_spiral': '阿基米德螺旋 - 螺旋图案',
+        'torus': '环面 - 环形图案',
+        'sombrero': '墨西哥草帽 - sinc曲面',
+        'custom_expression': '自定义表达式 - 输入数学公式',
     }
 
     @classmethod
@@ -748,7 +1168,7 @@ class WindFieldFunctionFactory:
 
 # 导出所有函数类
 __all__ = [
-    # 函数类
+    # 原有函数类
     'SimpleWaveFunction',
     'RadialWaveFunction',
     'GaussianFunction',
@@ -763,6 +1183,18 @@ __all__ = [
     'NoiseFieldFunction',
     'PolynomialSurfaceFunction',
     'SaddlePointFunction',
+    # 新增函数类
+    'HyperbolicParaboloidFunction',
+    'EllipticParaboloidFunction',
+    'RippleFunction',
+    'RoseCurveFunction',
+    'LissajousFunction',
+    'HeartShapeFunction',
+    'ButterflyCurveFunction',
+    'ArchimedeanSpiralFunction',
+    'TorusFunction',
+    'SombreroFunction',
+    'CustomExpressionFunction',
     # 工厂类
     'WindFieldFunctionFactory',
     # 参数类

@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QWidget, QLabel, QMainWindow,
     QPushButton, QHBoxLayout, QSpinBox, QDoubleSpinBox, QSizePolicy
 )
-from PySide6.QtCore import Qt, Slot
+from PySide6.QtCore import Qt, Slot, QTimer
 from PySide6.QtGui import QAction
 import numpy as np
 
@@ -49,6 +49,14 @@ class Function3DWindow(QMainWindow):
         self.current_time = 0.0
         self.grid_data = np.zeros((40, 40))
         self.colorbar = None
+
+        # 节流定时器 - 防止过于频繁的更新
+        self._update_pending = False
+        self._pending_data = None
+        self._update_timer = QTimer()
+        self._update_timer.setSingleShot(True)
+        self._update_timer.setInterval(50)  # 50ms节流，即最多20fps
+        self._update_timer.timeout.connect(self._process_pending_update)
 
         # 窗口标志
         self.setWindowFlags(Qt.Window | Qt.WindowStaysOnTopHint)
@@ -165,7 +173,7 @@ class Function3DWindow(QMainWindow):
             traceback.print_exc()
 
     def _draw_initial_plot(self):
-        """绘制初始图形"""
+        """绘制初始图形 - 优化版本"""
         try:
             if self.ax is None:
                 return
@@ -180,11 +188,13 @@ class Function3DWindow(QMainWindow):
             sigma = 5
             Z = 100 * np.exp(-((X - center_x)**2 + (Y - center_y)**2) / (2 * sigma**2))
 
-            # 绘制3D表面
+            # 绘制3D表面 - 使用完整网格密度
             surf = self.ax.plot_surface(X, Y, Z,
                                        cmap='viridis',
                                        edgecolor='none',
-                                       alpha=0.8)
+                                       alpha=0.8,
+                                       rcount=40,  # 完整分辨率
+                                       ccount=40)  # 完整分辨率
 
             # 设置标签和标题
             self.ax.set_xlabel('X (列)', fontsize=10)
@@ -215,7 +225,7 @@ class Function3DWindow(QMainWindow):
             traceback.print_exc()
 
     def _update_plot(self):
-        """更新3D图形"""
+        """更新3D图形 - 优化版本"""
         if not MATPLOTLIB_AVAILABLE or self.ax is None:
             return
 
@@ -232,11 +242,13 @@ class Function3DWindow(QMainWindow):
             y = np.arange(rows)
             X, Y = np.meshgrid(x, y)
 
-            # 绘制3D表面
+            # 绘制3D表面 - 使用完整分辨率
             surf = self.ax.plot_surface(X, Y, self.grid_data,
                                        cmap='viridis',
                                        edgecolor='none',
-                                       alpha=0.8)
+                                       alpha=0.8,
+                                       rcount=40,  # 完整分辨率
+                                       ccount=40)  # 完整分辨率
 
             # 设置标签和标题
             self.ax.set_xlabel('X (列)', fontsize=10)
@@ -257,7 +269,8 @@ class Function3DWindow(QMainWindow):
             self.colorbar = self.figure.colorbar(surf, ax=self.ax, shrink=0.8, pad=0.1)
             self.colorbar.set_label('转速 (%)', fontsize=10)
 
-            self.canvas.draw()
+            # 使用draw_idle进行异步绘制，避免阻塞
+            self.canvas.draw_idle()
 
             max_val = self.grid_data.max()
             min_val = self.grid_data.min()
@@ -291,13 +304,28 @@ class Function3DWindow(QMainWindow):
         if hasattr(self, 'last_grid_data'):
             self.grid_data = self.last_grid_data
 
+        # 使用节流更新
+        self._schedule_update()
+
+    def _process_pending_update(self):
+        """处理待定的更新"""
+        if self._pending_data is not None:
+            self.grid_data = self._pending_data
+            self._pending_data = None
+        self._update_pending = False
         self._update_plot()
 
+    def _schedule_update(self):
+        """调度更新（带节流）"""
+        self._update_pending = True
+        if not self._update_timer.isActive():
+            self._update_timer.start()
+
     def set_grid_data(self, grid_data: np.ndarray):
-        """直接设置网格数据"""
+        """直接设置网格数据 - 使用节流机制"""
         self.last_grid_data = grid_data.copy()
-        self.grid_data = grid_data
-        self._update_plot()
+        self._pending_data = grid_data
+        self._schedule_update()
 
     def showEvent(self, event):
         """窗口显示事件"""

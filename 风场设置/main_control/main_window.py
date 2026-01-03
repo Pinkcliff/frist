@@ -531,7 +531,7 @@ class MainWindow(QMainWindow):
         try:
             # 导入wind_field_editor模块
             sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-            from wind_field_editor.functions import WindFieldFunctionFactory, FunctionParams
+            from wind_field_editor.functions import WindFieldFunctionFactory, FunctionParams, CustomExpressionFunction
 
             # 保存当前状态
             self.data_before_edit = np.copy(self.canvas_widget.grid_data)
@@ -552,8 +552,14 @@ class MainWindow(QMainWindow):
             if 'amplitude' in params:
                 function_params.amplitude = params['amplitude']
 
-            # 创建并应用函数
+            # 创建函数
             func = WindFieldFunctionFactory.create(function_type, function_params)
+
+            # 对于自定义表达式，需要设置表达式
+            if function_type == 'custom_expression' and 'expression' in params:
+                if isinstance(func, CustomExpressionFunction):
+                    func.set_expression(params['expression'])
+                    self._add_info_message(f"自定义表达式: {params['expression']}")
 
             # 创建临时网格用于函数计算
             grid_shape = self.canvas_widget.grid_data.shape
@@ -609,6 +615,9 @@ class MainWindow(QMainWindow):
             # 保存当前函数参数供时间轴使用
             self.current_function_params = (function_type, params)
 
+            # 重置时间轴到开始位置
+            self.timeline_widget.set_current_time(0.0)
+
             # 使用时间轴的当前时间应用函数
             current_time = self.timeline_widget.get_current_time()
             result_grid = self._apply_function_without_undo(function_type, params, current_time)
@@ -633,7 +642,7 @@ class MainWindow(QMainWindow):
         try:
             # 导入wind_field_editor模块
             sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-            from wind_field_editor.functions import WindFieldFunctionFactory, FunctionParams
+            from wind_field_editor.functions import WindFieldFunctionFactory, FunctionParams, CustomExpressionFunction
 
             # 创建参数
             function_params = FunctionParams()
@@ -646,8 +655,13 @@ class MainWindow(QMainWindow):
             if 'amplitude' in params:
                 function_params.amplitude = params['amplitude']
 
-            # 创建并应用函数
+            # 创建函数
             func = WindFieldFunctionFactory.create(function_type, function_params)
+
+            # 对于自定义表达式，需要设置表达式
+            if function_type == 'custom_expression' and 'expression' in params:
+                if isinstance(func, CustomExpressionFunction):
+                    func.set_expression(params['expression'])
 
             # 创建临时网格用于函数计算
             grid_shape = self.canvas_widget.grid_data.shape
