@@ -21,7 +21,8 @@ from .floating_windows import (
     SelectionInfoWindow, BrushToolWindow, FanSettingsWindow,
     TimeSettingsWindow, TemplateLibraryWindow, InfoWindow,
     CircleToolWindow, LineToolWindow, FunctionToolWindow
-) 
+)
+from .enhanced_function_tool import EnhancedFunctionToolWindow 
 
 class MainWindow(QMainWindow):
     """重新设计的主窗口，包含右侧Dock面板和工具模式切换"""
@@ -48,7 +49,16 @@ class MainWindow(QMainWindow):
         self.runtime_timer.setInterval(1000) # 每秒更新一次
         self.runtime_timer.timeout.connect(self._update_runtime_display)
         # self.runtime_timer.start()
-        
+
+        # 函数预览动画计时器
+        self.animation_timer = QTimer(self)
+        self.animation_timer.setInterval(50)  # 50ms一帧，20fps
+        self.animation_timer.timeout.connect(self._update_animation_frame)
+        self.animation_params = None  # 存储动画参数 (function_type, params, start_time)
+        self.animation_start_time = None
+        self.animation_duration = 5.0  # 动画持续5秒
+        self.original_grid_data = None  # 存储动画前的网格数据
+
         # 初始化工具面板
         self._init_tool_widgets()
         
@@ -68,12 +78,15 @@ class MainWindow(QMainWindow):
         self.brush_widget = BrushToolWindow(self)
         self.circle_widget = CircleToolWindow(self)
         self.line_widget = LineToolWindow(self)
-        self.function_widget = FunctionToolWindow(self)
+
+        # 【新增】使用增强版函数工具窗口
+        self.function_widget = EnhancedFunctionToolWindow(self)
+
         # 这些仍然是独立的对话框
         self.fan_settings_window = FanSettingsWindow(self)
         self.time_settings_window = TimeSettingsWindow(self)
         self.template_window = TemplateLibraryWindow(self)
-        
+
         # 设置初始值
         self.fan_settings_window.set_max_rpm(self.max_rpm)
         self.time_settings_window.set_max_time(self.max_time)
@@ -369,7 +382,11 @@ class MainWindow(QMainWindow):
         self.circle_widget.clear_all_signal.connect(self._reset_all_fans_to_zero)
         self.line_widget.clear_all_signal.connect(self._reset_all_fans_to_zero)
         self.function_widget.clear_all_signal.connect(self._reset_all_fans_to_zero)
-        
+
+        # 【新增】函数工具应用信号
+        self.function_widget.apply_function_signal.connect(self._apply_function_to_grid)
+        self.function_widget.preview_animation_signal.connect(self._preview_function_animation)
+
         # 时间条信号
         self.timeline_widget.time_changed.connect(self._on_time_changed)
         self.timeline_widget.play_state_changed.connect(self._on_play_state_changed)
@@ -482,7 +499,180 @@ class MainWindow(QMainWindow):
     @Slot()
     def _function_generator_placeholder(self):
         self._add_info_message("函数生成器功能暂未实现")
-        
+
+    @Slot(str, dict, float)
+    def _apply_function_to_grid(self, function_type: str, params: dict, time_value: float):
+        """
+        应用数学函数到风场网格
+
+        Args:
+            function_type: 函数类型
+            params: 函数参数
+            time_value: 时间参数
+        """
+        try:
+            # 导入wind_field_editor模块
+            sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+            from wind_field_editor.functions import WindFieldFunctionFactory, FunctionParams
+
+            # 保存当前状态
+            self.data_before_edit = np.copy(self.canvas_widget.grid_data)
+
+            # 创建参数
+            function_params = FunctionParams()
+
+            # 解析中心位置
+            if 'center' in params and len(params['center']) == 2:
+                # 直接使用行列坐标
+                row_center, col_center = params['center']
+                function_params.center = (row_center, col_center)
+                # 显示为1-based索引
+                display_x = int(col_center) + 1
+                display_y = int(row_center) + 1
+                self._add_info_message(f"中心位置: x{display_x:03d}y{display_y:03d}")
+
+            if 'amplitude' in params:
+                function_params.amplitude = params['amplitude']
+
+            # 创建并应用函数
+            func = WindFieldFunctionFactory.create(function_type, function_params)
+
+            # 创建临时网格用于函数计算
+            grid_shape = self.canvas_widget.grid_data.shape
+            temp_grid = np.zeros(grid_shape)
+
+            # 应用函数
+            result_grid = func.apply(temp_grid, time=time_value)
+
+            # 更新画布
+            self.canvas_widget.grid_data = result_grid
+            self.canvas_widget.update_all_cells_from_data()
+            self.canvas_widget.update()
+
+            # 推送撤销命令
+            description = f"应用函数: {function_type}"
+            if time_value > 0:
+                description += f" (t={time_value:.2f}s)"
+            self._push_edit_command(description)
+
+            # 输出信息
+            stats = self.canvas_widget.grid_data
+            self._add_info_message(f"已应用 [{function_type}] 函数")
+            self._add_info_message(f"  最大值: {stats.max():.2f}%, 最小值: {stats.min():.2f}%")
+            self._add_info_message(f"  平均值: {stats.mean():.2f}%")
+
+        except ImportError as e:
+            self._add_info_message(f"错误: 无法导入wind_field_editor模块: {e}")
+            self._add_info_message("请确保wind_field_editor模块在项目根目录")
+
+        except Exception as e:
+            self._add_info_message(f"应用函数失败: {e}")
+            import traceback
+            traceback.print_exc()
+
+    @Slot(str, dict)
+    def _preview_function_animation(self, function_type: str, params: dict):
+        """
+        预览函数动画
+
+        Args:
+            function_type: 函数类型
+            params: 函数参数
+        """
+        try:
+            # 保存当前网格数据
+            self.original_grid_data = np.copy(self.canvas_widget.grid_data)
+
+            # 存储动画参数
+            self.animation_params = (function_type, params)
+            self.animation_start_time = datetime.now()
+
+            # 开始动画
+            self.animation_timer.start()
+            self._add_info_message(f"开始预览动画: {function_type}")
+            self._add_info_message(f"参数: {params}")
+
+        except Exception as e:
+            self._add_info_message(f"启动动画失败: {e}")
+            import traceback
+            traceback.print_exc()
+
+    @Slot()
+    def _update_animation_frame(self):
+        """更新动画帧"""
+        if self.animation_params is None:
+            return
+
+        try:
+            function_type, params = self.animation_params
+
+            # 计算当前动画时间
+            elapsed = (datetime.now() - self.animation_start_time).total_seconds()
+            time_value = elapsed
+
+            # 检查动画是否结束
+            if time_value >= self.animation_duration:
+                self.animation_timer.stop()
+                self._add_info_message("动画预览结束")
+                # 恢复原始数据
+                if self.original_grid_data is not None:
+                    self.canvas_widget.grid_data = self.original_grid_data
+                    self.canvas_widget.update_all_cells_from_data()
+                    self.canvas_widget.update()
+                self.animation_params = None
+                return
+
+            # 应用函数（不保存到撤销栈）
+            self._apply_function_without_undo(function_type, params, time_value)
+
+            # 更新信息显示
+            if int(elapsed * 10) % 5 == 0:  # 每0.5秒更新一次信息
+                self._add_info_message(f"动画时间: {time_value:.2f}s / {self.animation_duration:.1f}s")
+
+        except Exception as e:
+            self.animation_timer.stop()
+            self._add_info_message(f"动画更新失败: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _apply_function_without_undo(self, function_type: str, params: dict, time_value: float):
+        """应用函数但不保存到撤销栈（用于动画预览）"""
+        try:
+            # 导入wind_field_editor模块
+            sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+            from wind_field_editor.functions import WindFieldFunctionFactory, FunctionParams
+
+            # 创建参数
+            function_params = FunctionParams()
+
+            # 解析中心位置
+            if 'center' in params and len(params['center']) == 2:
+                row_center, col_center = params['center']
+                function_params.center = (row_center, col_center)
+
+            if 'amplitude' in params:
+                function_params.amplitude = params['amplitude']
+
+            # 创建并应用函数
+            func = WindFieldFunctionFactory.create(function_type, function_params)
+
+            # 创建临时网格用于函数计算
+            grid_shape = self.canvas_widget.grid_data.shape
+            temp_grid = np.zeros(grid_shape)
+
+            # 应用函数
+            result_grid = func.apply(temp_grid, time=time_value)
+
+            # 更新画布
+            self.canvas_widget.grid_data = result_grid
+            self.canvas_widget.update_all_cells_from_data()
+            self.canvas_widget.update()
+
+        except Exception as e:
+            self._add_info_message(f"应用函数失败: {e}")
+            import traceback
+            traceback.print_exc()
+
     @Slot()
     def _apply_fan_settings(self):
         max_rpm = self.fan_settings_window.get_max_rpm()

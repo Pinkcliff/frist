@@ -17,7 +17,9 @@
       "Bash(timeout:*)",
       "Bash(\"D:\\\\ProgramData\\\\Anaconda3\\\\envs\\\\my_env\\\\python.exe\" -m py_compile 前处理/CFD_module/pre_processor_window.py)",
       "Bash(mkdir:*)",
-      "Bash(\"D:\\\\ProgramData\\\\Anaconda3\\\\Scripts\\\\conda.exe\" run -n my_env python tests/run_tests.py)"
+      "Bash(\"D:\\\\ProgramData\\\\Anaconda3\\\\Scripts\\\\conda.exe\" run -n my_env python tests/run_tests.py)",
+      "Bash(\"D:\\\\ProgramData\\\\Anaconda3\\\\envs\\\\my_env\\\\python.exe\" \"风场编辑/test_wind_field_editor.py\")",
+      "Bash(\"D:\\\\ProgramData\\\\Anaconda3\\\\envs\\\\my_env\\\\python.exe\" \"F:\\\\A-User\\\\cliff\\\\frist\\\\frist\\\\tests\\\\test_coordinate_system_v2.py\")"
     ],
     "deny": [],
     "ask": []
