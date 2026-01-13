@@ -254,9 +254,20 @@ def apply_theme(window, theme_name):
     """
     if hasattr(window, 'log_tab_widget'):
         window.log_tab_widget.setStyleSheet(tab_style + table_style)
-        
+
     if hasattr(window, 'settings_tab_widget'):
         window.settings_tab_widget.setStyleSheet(tab_style)
+
+    # 为"俯仰·造雨·示踪"组合dock中的TabWidget应用主题
+    if '俯仰·造雨·示踪' in window.docks:
+        dock = window.docks['俯仰·造雨·示踪']
+        if dock:
+            # 查找dock中的所有QTabWidget并应用主题
+            for tab_widget in dock.findChildren(QTabWidget):
+                tab_widget.setStyleSheet(tab_style)
+                # 同时为tab内的table应用样式
+                for table in tab_widget.findChildren(QTableWidget):
+                    table.setStyleSheet(table_style)
 
     # --- 7. 确保设备状态相关的颜色更新 ---
     window.update_device_state()

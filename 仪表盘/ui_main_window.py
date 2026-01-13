@@ -1,6 +1,6 @@
 # ui_main_window.py
 from PySide6.QtWidgets import QMainWindow, QToolBar, QPushButton, QTableWidgetItem, QApplication
-from PySide6.QtCore import QDateTime, QTimer, QPoint
+from PySide6.QtCore import QDateTime, QTimer, QPoint, Qt
 import random
 
 from ui_custom_widgets import BackgroundWidget, ThemeSwitch
@@ -62,8 +62,61 @@ class GlobalDashboardWindow(QMainWindow):
         self.time_updater.start(1000)
         
         self.update_device_state()
-        
+
         debug.log_debug("主窗口初始化完成。")
+
+    def changeEvent(self, event):
+        """处理窗口状态变化事件"""
+        if event.type() == event.Type.WindowStateChange:
+            old_state = event.oldState()
+            new_state = self.windowState()
+
+            # 即将最小化时，保存所有dock的可见性状态
+            if (new_state & Qt.WindowMinimized) and not (old_state & Qt.WindowMinimized):
+                debug.log_debug("[changeEvent] 主窗口即将最小化，保存所有dock状态")
+                self._save_docks_visibility()
+
+            # 从最小化恢复时，恢复所有dock的状态
+            elif (old_state & Qt.WindowMinimized) and not (new_state & Qt.WindowMinimized):
+                debug.log_debug("[changeEvent] 主窗口从最小化恢复，恢复所有dock状态")
+                self._restore_docks_visibility()
+
+        super().changeEvent(event)
+
+    def _save_docks_visibility(self):
+        """主窗口最小化时，保存所有dock的可见性状态"""
+        self._docks_visibility_before_minimize = {}
+        for name, dock in self.docks.items():
+            if dock:
+                # 保存每个dock的可见性状态
+                self._docks_visibility_before_minimize[name] = dock.isVisible()
+                debug.log_debug(f"  保存dock状态: {name} -> {dock.isVisible()}")
+
+    def _restore_docks_visibility(self):
+        """主窗口恢复时，恢复所有dock到最小化前的状态"""
+        if not hasattr(self, '_docks_visibility_before_minimize'):
+            debug.log_debug("  没有保存的状态，使用默认行为")
+            self._restore_all_docks_visibility()
+            return
+
+        for name, dock in self.docks.items():
+            if dock and name in self._docks_visibility_before_minimize:
+                was_visible = self._docks_visibility_before_minimize[name]
+                if was_visible:
+                    dock.show()
+                    dock.raise_()
+                    debug.log_debug(f"  恢复显示dock: {name}")
+                else:
+                    dock.hide()
+                    debug.log_debug(f"  保持隐藏dock: {name}")
+
+    def _restore_all_docks_visibility(self):
+        """备用方法：重新显示所有之前标记为可见的dock"""
+        for name, dock in self.docks.items():
+            if dock and hasattr(dock, '_visible_before_hide') and dock._visible_before_hide:
+                dock.show()
+                dock.raise_()
+                debug.log_debug(f"  重新显示dock: {name}")
 
     def _create_mock_camera_data(self):
         """为20个相机创建模拟数据"""
@@ -99,25 +152,22 @@ class GlobalDashboardWindow(QMainWindow):
 
         # --- 创建 Docks ---
         self.docks['系统'] = Docks.create_system_dock(self)
-        self.docks['通讯'] = Docks.create_comm_dock(self)
-        self.docks['电流'] = Docks.create_chart_dock(self, "实时电流监控", "电流 (A)", (0, 1000))
-        self.docks['电压'] = Docks.create_chart_dock(self, "实时电压监控", "电压 (V)", (360, 400))
-        self.docks['功率'] = Docks.create_chart_dock(self, "实时功率监控", "功率 (kW)", (0, 500))
+        self.docks['通讯'] = Docks.create_comm_dock(self)  # 现在包含电力模块
+        # 电力模块（电流、电压、功率）已整合到通讯dock中，不再创建独立dock
         self.docks['环境'] = Docks.create_env_dock(self)
         self.docks['日志'] = Docks.create_log_dock(self)
-        self.docks['俯仰'] = Docks.create_pitch_dock(self)
+        # 俯仰、造雨、示踪整合为一个组合dock
+        self.docks['俯仰·造雨·示踪'] = Docks.create_combined_pitch_rain_trace_dock(self)
         self.docks['风机'] = Docks.create_fan_dock(self)
-        self.docks['造雨'] = Docks.create_rain_dock(self)
-        self.docks['示踪'] = Docks.create_trace_dock(self)
-        
-        self.camera_status_lights = [] 
+
+        self.camera_status_lights = []
         self.docks['动捕'] = Docks.create_motion_capture_dock(self)
-        
+
         self.docks['标定'] = Docks.create_calibration_dock(self)
         self.docks['仿真'] = Docks.create_simulation_dock(self)
         self.docks['训练'] = Docks.create_training_dock(self)
         self.docks['设置'] = Docks.create_settings_dock(self)
-        
+
         self.docks['TCP/IP设置'] = Docks.create_tcp_settings_dock(self)
         self.docks['Modbus RTU设置'] = Docks.create_modbus_settings_dock(self)
         self.docks['EtherCAT设置'] = Docks.create_ethercat_settings_dock(self)
@@ -125,9 +175,9 @@ class GlobalDashboardWindow(QMainWindow):
 
         # --- 创建单例和隐藏的 Docks ---
         # Parent is None to be a true top-level window, not constrained by the main window
-        self.camera_settings_dock = CameraSettingsDock(self.canvas) 
+        self.camera_settings_dock = CameraSettingsDock(self.canvas)
         self.docks['相机详细设置'] = self.camera_settings_dock
-        self.camera_settings_dock.hide() 
+        self.camera_settings_dock.hide()
         self.docks['相机详细设置'] = self.camera_settings_dock
         self.camera_settings_dock.hide()
 
@@ -135,39 +185,47 @@ class GlobalDashboardWindow(QMainWindow):
         self.docks['动捕视场'] = Docks.create_motion_capture_view_dock(self)
         self.docks['动捕视场'].hide()
 
-        # Position default Docks
+        # Position default Docks - 设置默认dock的位置
         self.docks['系统'].move(20, 10); self.docks['系统'].resize(250, 135)
-        self.docks['通讯'].move(280, 10); self.docks['通讯'].resize(910, 135)
-        self.docks['电流'].move(20, 150)
-        self.docks['电压'].move(430, 150)
-        self.docks['功率'].move(20, 460)
-        self.docks['环境'].move(840, 150); self.docks['环境'].resize(350, 300)
-        self.docks['日志'].move(430, 460); self.docks['日志'].resize(750, 300)
-        
+        self.docks['通讯'].move(280, 10); self.docks['通讯'].resize(910, 310)
+        self.docks['环境'].move(20, 330); self.docks['环境'].resize(350, 300)
+        self.docks['日志'].move(390, 330); self.docks['日志'].resize(800, 300)
+
         # Hide all non-default docks initially
-        default_docks = ['系统', '通讯', '电流', '电压', '功率', '环境', '日志']
+        default_docks = ['系统', '通讯', '环境', '日志']
         for name, dock in self.docks.items():
             if name not in default_docks:
                 dock.hide()
-        
+            else:
+                # 确保默认dock的可见性标记被设置
+                dock._visible_before_hide = True
+
         # Setup Toolbar
-        button_order = ["系统", "通讯", "电流", "电压", "功率", "环境", "日志", 
-                        "俯仰", "风机", "造雨", "示踪", "动捕", "标定", "仿真", "训练"]
-        
-        dynamic_docks = ['俯仰', '风机', '造雨', '示踪', '动捕', '标定', '仿真', '训练', '设置']
+        button_order = ["系统", "通讯", "环境", "日志",
+                        "俯仰·造雨·示踪", "风机", "动捕", "标定", "仿真", "训练"]
+
+        dynamic_docks = ['俯仰·造雨·示踪', '风机', '动捕', '标定', '仿真', '训练', '设置']
 
         for name in button_order:
             button = QPushButton(name)
             button.setCheckable(True)
-            button.setChecked(self.docks[name].isVisible())
-            
+            # 对于默认dock，初始应该是checked状态
+            initial_checked = name in default_docks
+            button.setChecked(initial_checked)
+
             if name in dynamic_docks:
                 button.toggled.connect(lambda checked, n=name: self.toggle_dynamic_dock(n, checked))
             else:
                 button.toggled.connect(self.docks[name].setVisible)
-            
+
             self.docks[name].visibilityChanged.connect(button.setChecked)
-            button.setFixedSize(45, 30)
+
+            # 根据按钮文字长度设置按钮大小
+            if name == "俯仰·造雨·示踪":
+                button.setFixedSize(115, 30)  # 为长文字按钮设置更大的宽度
+            else:
+                button.setFixedSize(45, 30)
+
             self.toolbar_buttons[name] = button
             self.toolbar.addWidget(button)
         

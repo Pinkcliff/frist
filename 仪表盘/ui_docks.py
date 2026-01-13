@@ -19,10 +19,10 @@ from ui_motion_capture import CameraStatusLight
 # --- MODIFIED: Added is_independent parameter ---
 # ui_docks.py -> create_styled_dock (恢复到原始版本)
 
-def create_styled_dock(parent, title, content_widget, 
+def create_styled_dock(parent, title, content_widget,
                        min_size_from_content=True, default_size=None, default_pos=None, is_independent=False):
-    # 这里的 parent 必须是主窗口的 canvas，不能是 None
-    frame = DraggableFrame(title, parent, is_independent_window=is_independent)
+    # 创建dock，所有dock都嵌入在主窗口中
+    frame = DraggableFrame(title, parent, is_independent_window=False)
     frame.setContentWidget(content_widget)
     if min_size_from_content:
         frame.setMinimumSizeFromContent()
@@ -168,25 +168,67 @@ def create_api_settings_dock(main_window):
 # 主要功能 Dock
 # =========================================================================
 
-def create_system_dock(main_window):
+def create_system_dock(main_window, is_independent=False):
     main_window.health_indicator = OverallHealthIndicator()
-    return create_styled_dock(main_window.canvas, "系统状态", main_window.health_indicator)
+    return create_styled_dock(main_window.canvas, "系统状态", main_window.health_indicator, is_independent=is_independent)
 
-def create_comm_dock(main_window):
-    content = QWidget()
-    layout = QHBoxLayout(content)
-    layout.setSpacing(10)
-    
+def create_comm_dock(main_window, is_independent=False):
+    # 主容器，使用垂直布局
+    main_container = QWidget()
+    main_layout = QVBoxLayout(main_container)
+    main_layout.setSpacing(10)
+    main_layout.setContentsMargins(0, 0, 0, 0)
+
+    # --- 上半部分：通讯状态 ---
+    comm_content = QWidget()
+    comm_layout = QHBoxLayout(comm_content)
+    comm_layout.setSpacing(10)
+
     main_window.comm_indicators.clear()
     for name in main_window.DEFAULT_COMM_PROTOCOLS.keys():
         total_map = {"主控制器": 1, "电驱": 100, "风速传感": 64, "温度传感": 64, "湿度传感": 4, "动捕": 20, "俯仰伺服": 1, "造雨": 4, "喷雾": 5, "训练": 1, "仿真": 1, "电力": 1}
         total = total_map.get(name, 1)
         indicator = CommunicationStatusIndicator(name, total, total, 10)
-        layout.addWidget(indicator)
+        comm_layout.addWidget(indicator)
         main_window.comm_indicators.append(indicator)
-        
-    layout.addStretch()
-    return create_styled_dock(main_window.canvas, "通讯状态", content)
+
+    comm_layout.addStretch()
+
+    # --- 添加分隔线 ---
+    separator = QFrame()
+    separator.setFrameShape(QFrame.HLine)
+    separator.setFrameShadow(QFrame.Sunken)
+    separator.setStyleSheet("background-color: #404448;")
+
+    # --- 下半部分：电力监控 ---
+    power_content = QWidget()
+    power_layout = QHBoxLayout(power_content)
+    power_layout.setSpacing(15)
+
+    # 创建三个电力监控图表（缩小版本）
+    from ui_chart_widget import RealTimeChartWidget
+
+    # 电流图表
+    main_window.chart_current_widget = RealTimeChartWidget("实时电流监控", "电流 (A)", (0, 1000), parent=main_window.canvas)
+    main_window.chart_current_widget.setFixedHeight(120)
+    power_layout.addWidget(main_window.chart_current_widget)
+
+    # 电压图表
+    main_window.chart_voltage_widget = RealTimeChartWidget("实时电压监控", "电压 (V)", (360, 400), parent=main_window.canvas)
+    main_window.chart_voltage_widget.setFixedHeight(120)
+    power_layout.addWidget(main_window.chart_voltage_widget)
+
+    # 功率图表
+    main_window.chart_power_widget = RealTimeChartWidget("实时功率监控", "功率 (kW)", (0, 500), parent=main_window.canvas)
+    main_window.chart_power_widget.setFixedHeight(120)
+    power_layout.addWidget(main_window.chart_power_widget)
+
+    # 添加到主布局
+    main_layout.addWidget(comm_content, 1)  # 通讯状态占据1份空间
+    main_layout.addWidget(separator)        # 分隔线
+    main_layout.addWidget(power_content, 1)  # 电力监控占据1份空间
+
+    return create_styled_dock(main_window.canvas, "通讯与电力", main_container, is_independent=is_independent)
 
 def create_chart_dock(main_window, title, y_label, y_range):
     chart_widget = RealTimeChartWidget(title, y_label, y_range, parent=main_window.canvas)
@@ -196,7 +238,7 @@ def create_chart_dock(main_window, title, y_label, y_range):
     
     return create_styled_dock(main_window.canvas, title, chart_widget, min_size_from_content=False, default_size=(400, 300))
 
-def create_env_dock(main_window):
+def create_env_dock(main_window, is_independent=False):
     content_container = QWidget()
     main_layout = QVBoxLayout(content_container)
     main_layout.setContentsMargins(0,0,0,0)
@@ -225,11 +267,16 @@ def create_env_dock(main_window):
     main_layout.addWidget(grid_widget)
     main_layout.addStretch(1)
 
-    return create_styled_dock(main_window.canvas, "环境", content_container)
+    return create_styled_dock(main_window.canvas, "环境", content_container, is_independent=is_independent)
 
-def create_log_dock(main_window):
+def create_log_dock(main_window, is_independent=False):
+    """
+    创建日志与告警Dock，包含各模块的单独日志界面。
+    修改：添加通讯、电力、环境、动捕、风机的单独日志界面。
+    """
     main_window.log_tab_widget = QTabWidget()
-    
+
+    # 1. 活动告警选项卡
     alarm_widget = QWidget()
     alarm_layout = QVBoxLayout(alarm_widget)
     main_window.table_active_alarms = QTableWidget(0, 5)
@@ -237,7 +284,8 @@ def create_log_dock(main_window):
     main_window.table_active_alarms.horizontalHeader().setStretchLastSection(True)
     alarm_layout.addWidget(main_window.table_active_alarms)
     main_window.log_tab_widget.addTab(alarm_widget, "活动告警")
-    
+
+    # 2. 系统日志选项卡
     log_widget = QWidget()
     log_layout = QVBoxLayout(log_widget)
     main_window.table_system_logs = QTableWidget(0, 4)
@@ -245,8 +293,53 @@ def create_log_dock(main_window):
     main_window.table_system_logs.horizontalHeader().setStretchLastSection(True)
     log_layout.addWidget(main_window.table_system_logs)
     main_window.log_tab_widget.addTab(log_widget, "系统日志")
-    
-    return create_styled_dock(main_window.canvas, "日志与告警", main_window.log_tab_widget)
+
+    # 3. 通讯日志选项卡
+    comm_log_widget = QWidget()
+    comm_log_layout = QVBoxLayout(comm_log_widget)
+    main_window.table_comm_logs = QTableWidget(0, 4)
+    main_window.table_comm_logs.setHorizontalHeaderLabels(["时间", "级别", "来源", "日志内容"])
+    main_window.table_comm_logs.horizontalHeader().setStretchLastSection(True)
+    comm_log_layout.addWidget(main_window.table_comm_logs)
+    main_window.log_tab_widget.addTab(comm_log_widget, "通讯日志")
+
+    # 4. 电力日志选项卡
+    power_log_widget = QWidget()
+    power_log_layout = QVBoxLayout(power_log_widget)
+    main_window.table_power_logs = QTableWidget(0, 4)
+    main_window.table_power_logs.setHorizontalHeaderLabels(["时间", "级别", "来源", "日志内容"])
+    main_window.table_power_logs.horizontalHeader().setStretchLastSection(True)
+    power_log_layout.addWidget(main_window.table_power_logs)
+    main_window.log_tab_widget.addTab(power_log_widget, "电力日志")
+
+    # 5. 环境日志选项卡
+    env_log_widget = QWidget()
+    env_log_layout = QVBoxLayout(env_log_widget)
+    main_window.table_env_logs = QTableWidget(0, 4)
+    main_window.table_env_logs.setHorizontalHeaderLabels(["时间", "级别", "来源", "日志内容"])
+    main_window.table_env_logs.horizontalHeader().setStretchLastSection(True)
+    env_log_layout.addWidget(main_window.table_env_logs)
+    main_window.log_tab_widget.addTab(env_log_widget, "环境日志")
+
+    # 6. 动捕日志选项卡
+    motion_log_widget = QWidget()
+    motion_log_layout = QVBoxLayout(motion_log_widget)
+    main_window.table_motion_logs = QTableWidget(0, 4)
+    main_window.table_motion_logs.setHorizontalHeaderLabels(["时间", "级别", "来源", "日志内容"])
+    main_window.table_motion_logs.horizontalHeader().setStretchLastSection(True)
+    motion_log_layout.addWidget(main_window.table_motion_logs)
+    main_window.log_tab_widget.addTab(motion_log_widget, "动捕日志")
+
+    # 7. 风机日志选项卡
+    fan_log_widget = QWidget()
+    fan_log_layout = QVBoxLayout(fan_log_widget)
+    main_window.table_fan_logs = QTableWidget(0, 4)
+    main_window.table_fan_logs.setHorizontalHeaderLabels(["时间", "级别", "来源", "日志内容"])
+    main_window.table_fan_logs.horizontalHeader().setStretchLastSection(True)
+    fan_log_layout.addWidget(main_window.table_fan_logs)
+    main_window.log_tab_widget.addTab(fan_log_widget, "风机日志")
+
+    return create_styled_dock(main_window.canvas, "日志与告警", main_window.log_tab_widget, is_independent=is_independent)
 
 # ui_docks.py
 
@@ -747,57 +840,82 @@ def create_settings_dock(main_window):
 def create_pitch_dock(main_window):
     """
     创建俯仰控制Dock，包含控制和状态显示。
+    俯仰精度0.1°，俯仰过程中执行按钮不可选中。
     """
     # 主内容Widget
     content = QWidget()
-    
+
     main_layout = QVBoxLayout(content)
-    
+
     main_layout.setSpacing(15)
 
     # --- 1. 控制 Frame ---
     control_group = QGroupBox("控制")
-    
+
     main_layout.addWidget(control_group)
-    
+
     control_layout = QFormLayout(control_group)
-    
+
     control_layout.setLabelAlignment(Qt.AlignRight)
 
-    # 目标角度输入
+    # 目标角度输入 - 精度0.1°
     angle_spin = QDoubleSpinBox()
-    
+
     angle_spin.setRange(-45, 90)
-    
-    angle_spin.setSuffix("°") # 添加单位
-    
+    angle_spin.setDecimals(1)  # 精度0.1°
+    angle_spin.setSingleStep(0.1)  # 每次调整0.1°
+    angle_spin.setSuffix("°")  # 添加单位
+
+    # 执行按钮
+    execute_btn = QPushButton("执行")
+
     # 将输入框和执行按钮放在同一行
     control_row_widget = QWidget()
-    
+
     control_row_layout = QHBoxLayout(control_row_widget)
-    
+
     control_row_layout.setContentsMargins(0, 0, 0, 0)
-    
+
     control_row_layout.addWidget(angle_spin)
-    
-    control_row_layout.addWidget(QPushButton("执行"))
-    
+
+    control_row_layout.addWidget(execute_btn)
+
     control_layout.addRow("目标角度 (-45° to +90°):", control_row_widget)
+
+    # --- 执行按钮点击事件处理 ---
+    def on_execute_clicked():
+        """执行俯仰操作，过程中禁用按钮"""
+        target_angle = angle_spin.value()
+        execute_btn.setEnabled(False)
+        execute_btn.setText("执行中...")
+
+        # 模拟执行过程（实际应用中这里应该是真正的控制逻辑）
+        from PySide6.QtCore import QTimer
+
+        # 模拟2秒后完成
+        QTimer.singleShot(2000, lambda: on_execution_complete(execute_btn))
+
+    def on_execution_complete(btn):
+        """执行完成，恢复按钮"""
+        btn.setEnabled(True)
+        btn.setText("执行")
+
+    execute_btn.clicked.connect(on_execute_clicked)
 
     # --- 2. 状态 Frame ---
     status_group = QGroupBox("状态")
-    
+
     main_layout.addWidget(status_group)
-    
+
     status_layout = QFormLayout(status_group)
-    
+
     status_layout.setLabelAlignment(Qt.AlignRight)
 
     # 添加状态标签
     status_layout.addRow("当前速度:", QLabel("0 °/s"))
-    
+
     status_layout.addRow("当前角度:", QLabel("0 °"))
-    
+
     status_layout.addRow("到位检测:", QLabel("到位"))
 
     # 添加伸展项，使布局更紧凑
@@ -807,156 +925,274 @@ def create_pitch_dock(main_window):
     return create_styled_dock(main_window, "俯仰控制", content, is_independent=True)
 
 
+def create_combined_pitch_rain_trace_dock(main_window):
+    """
+    创建俯仰、造雨、示踪的组合Dock，三个界面放在一起。
+    """
+    # 主容器，使用选项卡组件
+    content = QTabWidget()
+
+    # --- 俯仰控制选项卡 ---
+    pitch_content = QWidget()
+    pitch_layout = QVBoxLayout(pitch_content)
+    pitch_layout.setSpacing(15)
+
+    # 俯仰控制
+    pitch_control_group = QGroupBox("控制")
+    pitch_layout.addWidget(pitch_control_group)
+    pitch_control_layout = QFormLayout(pitch_control_group)
+    pitch_control_layout.setLabelAlignment(Qt.AlignRight)
+
+    # 目标角度输入 - 精度0.1°
+    pitch_angle_spin = QDoubleSpinBox()
+    pitch_angle_spin.setRange(-45, 90)
+    pitch_angle_spin.setDecimals(1)  # 精度0.1°
+    pitch_angle_spin.setSingleStep(0.1)
+    pitch_angle_spin.setSuffix("°")
+
+    pitch_execute_btn = QPushButton("执行")
+    pitch_control_row = QWidget()
+    pitch_control_row_layout = QHBoxLayout(pitch_control_row)
+    pitch_control_row_layout.setContentsMargins(0, 0, 0, 0)
+    pitch_control_row_layout.addWidget(pitch_angle_spin)
+    pitch_control_row_layout.addWidget(pitch_execute_btn)
+    pitch_control_layout.addRow("目标角度 (-45° to +90°):", pitch_control_row)
+
+    # 俯仰执行按钮事件
+    def on_pitch_execute():
+        pitch_execute_btn.setEnabled(False)
+        pitch_execute_btn.setText("执行中...")
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(2000, lambda: on_pitch_complete())
+
+    def on_pitch_complete():
+        pitch_execute_btn.setEnabled(True)
+        pitch_execute_btn.setText("执行")
+
+    pitch_execute_btn.clicked.connect(on_pitch_execute)
+
+    # 俯仰状态
+    pitch_status_group = QGroupBox("状态")
+    pitch_layout.addWidget(pitch_status_group)
+    pitch_status_layout = QFormLayout(pitch_status_group)
+    pitch_status_layout.setLabelAlignment(Qt.AlignRight)
+    pitch_status_layout.addRow("当前速度:", QLabel("0 °/s"))
+    pitch_status_layout.addRow("当前角度:", QLabel("0 °"))
+    pitch_status_layout.addRow("到位检测:", QLabel("到位"))
+
+    pitch_layout.addStretch(1)
+    content.addTab(pitch_content, "俯仰")
+
+    # --- 造雨设置选项卡 ---
+    rain_content = QWidget()
+    rain_layout = QVBoxLayout(rain_content)
+    rain_layout.setSpacing(20)  # 增加间距到20
+
+    # 造雨控制
+    rain_control_group = QGroupBox("控制")
+    rain_layout.addWidget(rain_control_group)
+    rain_control_layout = QFormLayout(rain_control_group)
+    rain_control_layout.setLabelAlignment(Qt.AlignRight)
+    rain_control_layout.setVerticalSpacing(18)  # 增加行间距到18，防止文字显示不全
+
+    # 定义字体样式
+    from PySide6.QtGui import QFont
+    control_font = QFont()
+    control_font.setPointSize(10)  # 控制界面字体大小
+    status_font = QFont()
+    status_font.setPointSize(9)  # 状态界面字体大小（更小）
+    button_font = QFont()
+    button_font.setPointSize(10)
+
+    rain_control_layout.addRow("水泵:", QPushButton("开关"))
+
+    # 流量设置 - 增加输入框宽度
+    rain_flow_widget = QWidget()
+    rain_flow_layout = QHBoxLayout(rain_flow_widget)
+    rain_flow_layout.setContentsMargins(0, 0, 0, 0)
+    rain_flow_layout.setSpacing(8)  # 增加控件之间的间距
+
+    rain_flow_slider = QSlider(Qt.Horizontal)
+    rain_flow_slider.setRange(0, 120)
+    rain_flow_slider.setValue(120)
+    rain_flow_label = QLabel(f"{rain_flow_slider.value() / 10.0:.1f} m³/h")
+    rain_flow_label.setFixedWidth(75)  # 增加宽度
+    rain_flow_label.setFont(control_font)  # 设置字体
+    rain_flow_layout.addWidget(rain_flow_slider)
+    rain_flow_layout.addWidget(rain_flow_label)
+
+    # 流量输入框 - 增加宽度和字体
+    rain_flow_input = QLineEdit("12.0")
+    rain_flow_input.setFixedWidth(80)  # 从60增加到80
+    rain_flow_input.setFont(control_font)  # 设置字体
+    rain_flow_input.setValidator(QDoubleValidator(0.0, 12.0, 1))
+
+    or_label = QLabel("或直接输入:")
+    or_label.setFont(control_font)
+    unit_label = QLabel("m³/h")
+    unit_label.setFont(control_font)
+
+    rain_flow_layout.addWidget(or_label)
+    rain_flow_layout.addWidget(rain_flow_input)
+    rain_flow_layout.addWidget(unit_label)
+
+    rain_flow_slider.valueChanged.connect(
+        lambda v: rain_flow_label.setText(f"{v / 10.0:.1f} m³/h")
+    )
+
+    rain_control_layout.addRow("流量 (0-12 m³/h):", rain_flow_widget)
+
+    # 雨量选择
+    rain_level_combo = QComboBox()
+    rain_level_combo.addItems(["微雨", "小雨", "中雨", "大雨", "暴雨", "大暴雨", "特大暴雨"])
+    rain_level_combo.setCurrentText("特大暴雨")
+    rain_level_combo.setFont(control_font)
+    rain_control_layout.addRow("雨量选择:", rain_level_combo)
+
+    # 喷嘴类型 (A/B/C)
+    rain_nozzle_type_combo = QComboBox()
+    rain_nozzle_type_combo.addItems(["类型A", "类型B", "类型C"])
+    rain_nozzle_type_combo.setCurrentText("类型A")
+    rain_nozzle_type_combo.setFont(control_font)
+    rain_control_layout.addRow("喷嘴类型:", rain_nozzle_type_combo)
+
+    rain_max_rain_check = QCheckBox("瞬时最大降雨")
+    rain_max_rain_check.setChecked(True)
+    rain_max_rain_check.setFont(control_font)
+    rain_control_layout.addRow("", rain_max_rain_check)
+
+    # 造雨状态
+    rain_status_group = QGroupBox("状态")
+    rain_layout.addWidget(rain_status_group)
+    rain_status_layout = QFormLayout(rain_status_group)
+    rain_status_layout.setLabelAlignment(Qt.AlignRight)
+    rain_status_layout.setVerticalSpacing(12)  # 增加行间距
+
+    # 状态标签 - 使用更小的字体
+    status_labels = []
+    for text in ["瞬时最大:", "当前流量:", "当前电机转速:", "当前水箱水位:", "当前补水阀门:"]:
+        label = QLabel(text)
+        label.setFont(status_font)  # 使用更小的状态字体
+        status_labels.append(label)
+
+    value_labels = []
+    for text in ["是", "12 m³/h", "3000 rpm", "60 %", "开"]:
+        label = QLabel(text)
+        label.setFont(status_font)  # 使用更小的状态字体
+        value_labels.append(label)
+
+    rain_status_layout.addRow(status_labels[0], value_labels[0])
+    rain_status_layout.addRow(status_labels[1], value_labels[1])
+    rain_status_layout.addRow(status_labels[2], value_labels[2])
+    rain_status_layout.addRow(status_labels[3], value_labels[3])
+    rain_status_layout.addRow(status_labels[4], value_labels[4])
+
+    rain_layout.addStretch(1)
+    content.addTab(rain_content, "造雨")
+
+    # --- 示踪设置选项卡 (造雾) ---
+    trace_content = QWidget()
+    trace_layout = QVBoxLayout(trace_content)
+    trace_layout.setSpacing(15)
+
+    # 示踪设置
+    trace_settings_group = QGroupBox("设置")
+    trace_layout.addWidget(trace_settings_group)
+    trace_settings_layout = QFormLayout(trace_settings_group)
+    trace_settings_layout.setLabelAlignment(Qt.AlignRight)
+
+    # 造雾机开关状态
+    trace_mist_switch = QPushButton("开关")
+    trace_settings_layout.addRow("造雾机:", trace_mist_switch)
+
+    # 目标位置跟踪
+    trace_tracking_check = QCheckBox("启用目标位置跟踪")
+    trace_tracking_check.setChecked(True)
+    trace_settings_layout.addRow("", trace_tracking_check)
+
+    # 示踪状态
+    trace_status_group = QGroupBox("状态")
+    trace_layout.addWidget(trace_status_group)
+    trace_status_layout = QFormLayout(trace_status_group)
+    trace_status_layout.setLabelAlignment(Qt.AlignRight)
+    trace_status_layout.addRow("当前位置:", QLabel("距左侧 1.215 米"))
+    trace_status_layout.addRow("造雾机状态:", QLabel("关闭"))
+    trace_status_layout.addRow("在位:", QLabel("是"))
+
+    trace_layout.addStretch(1)
+    content.addTab(trace_content, "示踪")
+
+    # 创建并返回Dock
+    dock = create_styled_dock(main_window, "俯仰·造雨·示踪", content, is_independent=False)
+    dock.resize(400, 350)
+    return dock
+
 
 def create_fan_dock(main_window):
     """
-    创建风机设置的Dock，包含全局设置和当前风机阵列预览。
+    创建风机设置的Dock，包含全局风场状态和当前风机阵列预览。
+    修改：全局风场设置改为全局风场状态，仅显示值，不可更改。
     """
     # 主内容Widget
     content = QWidget()
-    
+
     main_layout = QVBoxLayout(content)
-    
+
     main_layout.setContentsMargins(10, 10, 10, 10)
-    
-    main_layout.setSpacing(15) # 增加GroupBox之间的间距
 
-    # --- 第一部分: 全局风场设置 ---
-    settings_group = QGroupBox("全局风场设置")
-    
-    main_layout.addWidget(settings_group)
+    main_layout.setSpacing(15)  # 增加GroupBox之间的间距
 
-    grid_layout = QGridLayout(settings_group)
-    
+    # --- 第一部分: 全局风场状态 (仅显示，不可编辑) ---
+    status_group = QGroupBox("全局风场状态")
+
+    main_layout.addWidget(status_group)
+
+    grid_layout = QGridLayout(status_group)
+
     grid_layout.setSpacing(10)
 
     # 第一行
-    refresh_rate_label = QLabel("风扇控制刷新率:")
-    
-    refresh_rate_combo = QComboBox()
-    
-    refresh_rate_combo.addItems(["1Hz", "5Hz", "10Hz", "50Hz", "100Hz"])
-    
-    refresh_rate_combo.setCurrentText("10Hz")
-    
-    grid_layout.addWidget(refresh_rate_label, 0, 0, Qt.AlignRight)
-    
-    grid_layout.addWidget(refresh_rate_combo, 0, 1)
+    grid_layout.addWidget(QLabel("风扇控制刷新率:"), 0, 0, Qt.AlignRight)
+    grid_layout.addWidget(QLabel("10Hz"), 0, 1)
 
-    spatial_res_label = QLabel("风场空间分辨率:")
-    
-    spatial_res_combo = QComboBox()
-    
-    spatial_res_combo.addItems(["40mm", "60mm", "80mm", "100mm", "120mm"])
-    
-    spatial_res_combo.setCurrentText("80mm")
-    
-    spatial_res_combo.setToolTip("请根据风扇尺寸选择")
-    
-    grid_layout.addWidget(spatial_res_label, 0, 2, Qt.AlignRight)
-    
-    grid_layout.addWidget(spatial_res_combo, 0, 3)
+    grid_layout.addWidget(QLabel("风场空间分辨率:"), 0, 2, Qt.AlignRight)
+    grid_layout.addWidget(QLabel("80mm"), 0, 3)
 
     # 第二行
-    time_res_label = QLabel("模板时间轴分辨率:")
-    
-    time_res_combo = QComboBox()
-    
-    time_res_combo.addItems(["10ms", "20ms", "30ms", "40ms", "50ms"])
-    
-    time_res_combo.setCurrentText("10ms")
-    
-    grid_layout.addWidget(time_res_label, 1, 0, Qt.AlignRight)
-    
-    grid_layout.addWidget(time_res_combo, 1, 1)
+    grid_layout.addWidget(QLabel("模板时间轴分辨率:"), 1, 0, Qt.AlignRight)
+    grid_layout.addWidget(QLabel("10ms"), 1, 1)
 
-    speed_range_label = QLabel("模板可编辑风速范围:")
-    
-    min_speed_edit = QLineEdit("0")
-    
-    max_speed_edit = QLineEdit("30")
-    
-    min_speed_edit.setFixedWidth(50)
-    
-    max_speed_edit.setFixedWidth(50)
-
-    validator = QDoubleValidator(0.0, 30.0, 2)
-    
-    min_speed_edit.setValidator(validator)
-    
-    max_speed_edit.setValidator(validator)
-
-    speed_range_widget = QWidget()
-    
-    speed_range_layout = QHBoxLayout(speed_range_widget)
-    
-    speed_range_layout.setContentsMargins(0, 0, 0, 0)
-    
-    speed_range_layout.setSpacing(5)
-    
-    speed_range_layout.addWidget(min_speed_edit)
-    
-    speed_range_layout.addWidget(QLabel("—"))
-    
-    speed_range_layout.addWidget(max_speed_edit)
-    
-    speed_range_layout.addWidget(QLabel("m/s"))
-    
-    grid_layout.addWidget(speed_range_label, 1, 2, Qt.AlignRight)
-    
-    grid_layout.addWidget(speed_range_widget, 1, 3)
+    grid_layout.addWidget(QLabel("模板可编辑风速范围:"), 1, 2, Qt.AlignRight)
+    grid_layout.addWidget(QLabel("0 — 30 m/s"), 1, 3)
 
     # 第三行
-    error_label = QLabel("风速波动误差:")
-    
-    error_combo = QComboBox()
-    
-    error_options = [f"±{i/10.0:.1f}m/s" for i in range(1, 6)]
-    
-    error_combo.addItems(error_options)
+    grid_layout.addWidget(QLabel("风速波动误差:"), 2, 0, Qt.AlignRight)
+    grid_layout.addWidget(QLabel("±0.5m/s"), 2, 1)
 
-    correction_label = QLabel("修正方式:")
-    
-    correction_combo = QComboBox()
-    
-    correction_methods = [
-        "阻塞效应修正", "模型预测控制", "自适应遗传PID", 
-        "扩展卡尔曼滤波", "风速比尺修正"
-    ]
-    
-    correction_combo.addItems(correction_methods)
-    
-    correction_combo.setCurrentText("自适应遗传PID")
-    
-    grid_layout.addWidget(error_label, 2, 0, Qt.AlignRight)
-    
-    grid_layout.addWidget(error_combo, 2, 1)
-    
-    grid_layout.addWidget(correction_label, 2, 2, Qt.AlignRight)
-    
-    grid_layout.addWidget(correction_combo, 2, 3)
+    grid_layout.addWidget(QLabel("修正方式:"), 2, 2, Qt.AlignRight)
+    grid_layout.addWidget(QLabel("自适应遗传PID"), 2, 3)
 
     # --- 第二部分: 当前风机阵列 ---
     fan_array_group = QGroupBox("当前风机阵列")
-    
+
     main_layout.addWidget(fan_array_group)
-    
+
     fan_array_layout = QVBoxLayout(fan_array_group)
-    
+
     fan_array_layout.setSpacing(10)
 
     # 图片显示
     image_label = QLabel()
-    
-    pixmap = QPixmap("风场.png") # 确保图片在正确的路径下
-    
+
+    pixmap = QPixmap("风场.png")  # 确保图片在正确的路径下
+
     # 将图片缩放到 400x400，并保持宽高比
     scaled_pixmap = pixmap.scaled(400, 400, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-    
+
     image_label.setPixmap(scaled_pixmap)
-    
-    image_label.setAlignment(Qt.AlignCenter) # 居中显示图片
-    
+
+    image_label.setAlignment(Qt.AlignCenter)  # 居中显示图片
+
     fan_array_layout.addWidget(image_label)
 
     # "进入风场编辑" 按钮
@@ -982,131 +1218,24 @@ def create_fan_dock(main_window):
 
     # 将按钮放在一个水平布局中以实现居中
     button_container = QWidget()
-    
+
     button_layout = QHBoxLayout(button_container)
-    
+
     button_layout.addStretch()
-    
+
     button_layout.addWidget(edit_button)
-    
+
     button_layout.addStretch()
-    
+
     fan_array_layout.addWidget(button_container)
 
-    # --- 逻辑处理 (与之前相同) ---
-    def validate_speed_range():
-        try:
-            min_val = float(min_speed_edit.text())
-            
-            max_val = float(max_speed_edit.text())
-
-            palette = min_speed_edit.palette()
-            
-            if max_val < min_val:
-                palette.setColor(QPalette.Text, QColor("red"))
-            else:
-                default_text_color = QWidget().palette().color(QPalette.WindowText)
-                
-                palette.setColor(QPalette.Text, default_text_color)
-            
-            min_speed_edit.setPalette(palette)
-            
-            max_speed_edit.setPalette(palette)
-        except ValueError:
-            pass
-
-    min_speed_edit.editingFinished.connect(validate_speed_range)
-    
-    max_speed_edit.editingFinished.connect(validate_speed_range)
-
     # --- 创建并返回Dock ---
-    dock = create_styled_dock(main_window, "风机设置", content, is_independent=True)
-    
+    dock = create_styled_dock(main_window, "风机设置", content, is_independent=False)
+
     # 调整Dock的初始尺寸以容纳新内容
     dock.resize(500, 650)
-    
+
     return dock
-
-
-    # --- 逻辑处理 (与之前相同) ---
-    def validate_speed_range():
-        try:
-            min_val = float(min_speed_edit.text())
-            
-            max_val = float(max_speed_edit.text())
-
-            palette = min_speed_edit.palette()
-            
-            if max_val < min_val:
-                palette.setColor(QPalette.Text, QColor("red"))
-            else:
-                default_text_color = QWidget().palette().color(QPalette.WindowText)
-                
-                palette.setColor(QPalette.Text, default_text_color)
-            
-            min_speed_edit.setPalette(palette)
-            
-            max_speed_edit.setPalette(palette)
-        except ValueError:
-            pass
-
-    min_speed_edit.editingFinished.connect(validate_speed_range)
-    
-    max_speed_edit.editingFinished.connect(validate_speed_range)
-
-    # --- 创建并返回Dock ---
-    # 添加一个伸展项，使得 GroupBox 不会垂直拉伸填满整个Dock
-    main_layout.addStretch(1)
-    
-    dock = create_styled_dock(main_window, "风机设置", content, is_independent=True)
-    
-    # 可以给Dock一个合适的初始尺寸
-    dock.resize(500, 200)
-    
-    return dock
-
-
-    # --- 逻辑处理 ---
-    def validate_speed_range():
-        """
-        验证最小和最大速度输入是否有效。
-        """
-        try:
-            min_val = float(min_speed_edit.text())
-            
-            max_val = float(max_speed_edit.text())
-
-            # 获取 QLineEdit 的调色板
-            palette = min_speed_edit.palette()
-            
-            # 检查最大值是否大于等于最小值
-            if max_val < min_val:
-                # 如果无效，将文本颜色设置为红色
-                palette.setColor(QPalette.Text, QColor("red"))
-            else:
-                # 如果有效，恢复为默认文本颜色
-                # 注意：这里不能直接用黑色，要用系统默认的窗口文本颜色
-                default_text_color = QWidget().palette().color(QPalette.WindowText)
-                
-                palette.setColor(QPalette.Text, default_text_color)
-            
-            # 应用调色板
-            min_speed_edit.setPalette(palette)
-            
-            max_speed_edit.setPalette(palette)
-
-        except ValueError:
-            # 如果输入不是有效的浮点数（例如为空），则不进行任何操作
-            pass
-
-    # 连接信号，当文本编辑完成时（例如失去焦点或按回车）进行验证
-    min_speed_edit.editingFinished.connect(validate_speed_range)
-    
-    max_speed_edit.editingFinished.connect(validate_speed_range)
-
-    # --- 创建并返回Dock ---
-    return create_styled_dock(main_window, "风机设置", content, is_independent=True)
-
 
 
 # ui_docks.py
@@ -1116,125 +1245,116 @@ def create_fan_dock(main_window):
 def create_rain_dock(main_window):
     """
     创建造雨设置Dock，包含详细的控制和状态显示。
+    修改：去掉PID修正流量精度；去掉喷嘴直径，改为喷嘴类型（A/B/C）；去掉阀门开度；控制中的流量调节增加输入框
     """
     content = QWidget()
-    
+
     main_layout = QVBoxLayout(content)
-    
+
     main_layout.setSpacing(15)
 
     # --- 1. 控制 Frame ---
     control_group = QGroupBox("控制")
-    
+
     main_layout.addWidget(control_group)
-    
+
     control_layout = QFormLayout(control_group)
-    
+
     control_layout.setLabelAlignment(Qt.AlignRight)
 
     # 水泵开关
     control_layout.addRow("水泵:", QPushButton("开关"))
 
-    # 流量设置 (带实时显示)
+    # 流量设置 - 带滑块和输入框
     flow_widget = QWidget()
-    
+
     flow_layout = QHBoxLayout(flow_widget)
-    
+
     flow_layout.setContentsMargins(0, 0, 0, 0)
-    
+
     flow_slider = QSlider(Qt.Horizontal)
-    
+
     # 设置滑块范围为 0 到 120，方便映射到 0-12.0 m³/h
     flow_slider.setRange(0, 120)
-    
-    flow_slider.setValue(120) # 默认最大值
-    
+
+    flow_slider.setValue(120)  # 默认最大值
+
     flow_label = QLabel(f"{flow_slider.value() / 10.0:.1f} m³/h")
-    
-    flow_label.setFixedWidth(70) # 给标签一个固定宽度以防抖动
-    
+
+    flow_label.setFixedWidth(70)  # 给标签一个固定宽度以防抖动
+
     flow_layout.addWidget(flow_slider)
-    
+
     flow_layout.addWidget(flow_label)
-    
+
+    # 流量输入框
+    flow_input = QLineEdit("12.0")
+    flow_input.setFixedWidth(60)
+    flow_input.setValidator(QDoubleValidator(0.0, 12.0, 1))
+    flow_layout.addWidget(QLabel("或直接输入:"))
+    flow_layout.addWidget(flow_input)
+    flow_layout.addWidget(QLabel("m³/h"))
+
     # 连接信号，当滑块值改变时更新标签文本
     flow_slider.valueChanged.connect(
         lambda value: flow_label.setText(f"{value / 10.0:.1f} m³/h")
     )
-    
+
     control_layout.addRow("流量 (0-12 m³/h):", flow_widget)
-
-    # PID修正流量精度
-    pid_accuracy_widget = QWidget()
-    pid_accuracy_layout = QHBoxLayout(pid_accuracy_widget)
-    pid_accuracy_layout.setContentsMargins(0, 0, 0, 0)
-    
-    pid_accuracy_edit = QLineEdit("1") # 默认值为1
-    pid_accuracy_edit.setValidator(QDoubleValidator(0.0, 100.0, 2)) # 限制输入为0-100的浮点数
-    pid_accuracy_edit.setFixedWidth(50)
-
-    pid_accuracy_layout.addWidget(pid_accuracy_edit)
-    pid_accuracy_layout.addWidget(QLabel("%"))
-    pid_accuracy_layout.addStretch()
-
-    control_layout.addRow("PID修正流量精度:", pid_accuracy_widget)
 
     # 雨量选择
     rain_level_combo = QComboBox()
-    
+
     rain_levels = [
-        "微雨", "小雨", "中雨", "大雨", 
+        "微雨", "小雨", "中雨", "大雨",
         "暴雨", "大暴雨", "特大暴雨"
     ]
-    
+
     rain_level_combo.addItems(rain_levels)
-    
+
     rain_level_combo.setCurrentText("特大暴雨")
-    
+
     control_layout.addRow("雨量选择:", rain_level_combo)
 
-    # 喷嘴直径
-    nozzle_combo = QComboBox()
-    
-    nozzle_sizes = [f"{i * 0.5:.1f}mm" for i in range(1, 9)]
-    
-    nozzle_combo.addItems(nozzle_sizes)
-    
-    nozzle_combo.setCurrentText("4.0mm") # 默认4mm
-    
-    control_layout.addRow("喷嘴直径:", nozzle_combo)
+    # 喷嘴类型 (A/B/C) - 替代原来的喷嘴直径
+    nozzle_type_combo = QComboBox()
+
+    nozzle_type_combo.addItems(["类型A", "类型B", "类型C"])
+
+    nozzle_type_combo.setCurrentText("类型A")
+
+    control_layout.addRow("喷嘴类型:", nozzle_type_combo)
 
     # 瞬时最大降雨
     max_rain_check = QCheckBox("瞬时最大降雨")
-    
+
     max_rain_check.setChecked(True)
-    
+
     control_layout.addRow("", max_rain_check)
 
     # --- 2. 状态 Frame ---
     status_group = QGroupBox("状态")
-    
+
     main_layout.addWidget(status_group)
-    
+
     status_layout = QFormLayout(status_group)
-    
+
     status_layout.setLabelAlignment(Qt.AlignRight)
 
     status_layout.addRow("瞬时最大:", QLabel("是"))
-    
+
     status_layout.addRow("当前流量:", QLabel("12 m³/h"))
-    
-    status_layout.addRow("当前阀门开度:", QLabel("90 %"))
-    
+
+    # 去掉阀门开度
     status_layout.addRow("当前电机转速:", QLabel("3000 rpm"))
-    
+
     status_layout.addRow("当前水箱水位:", QLabel("60 %"))
-    
+
     status_layout.addRow("当前补水阀门:", QLabel("开"))
 
     main_layout.addStretch(1)
 
-    return create_styled_dock(main_window, "造雨设置", content, is_independent=True)
+    return create_styled_dock(main_window, "造雨设置", content, is_independent=False)
 
 
 
@@ -1242,163 +1362,114 @@ def create_rain_dock(main_window):
 
 def create_trace_dock(main_window):
     """
-    创建示踪设置Dock，包含详细的设置和状态显示。
+    创建示踪设置Dock（造雾），包含设置和状态显示。
+    修改：去掉造雾量选择；去掉跟踪精度；状态仅保留当前位置；添加造雾机开关状态
     """
     content = QWidget()
-    
+
     main_layout = QVBoxLayout(content)
-    
+
     main_layout.setSpacing(15)
 
     # --- 1. 设置 Frame ---
     settings_group = QGroupBox("设置")
-    
+
     main_layout.addWidget(settings_group)
-    
+
     settings_layout = QFormLayout(settings_group)
-    
+
     settings_layout.setLabelAlignment(Qt.AlignRight)
 
-    # 造雾机开关
-    settings_layout.addRow("造雾机:", QPushButton("开关"))
+    # 造雾机开关状态
+    mist_switch_btn = QPushButton("关闭")
+    mist_switch_btn.setCheckable(True)
+    mist_switch_btn.setChecked(False)
 
-    # 造雾量
-    flow_widget = QWidget()
-    
-    flow_layout = QHBoxLayout(flow_widget)
-    
-    flow_layout.setContentsMargins(0, 0, 0, 0)
-    
-    flow_slider = QSlider(Qt.Horizontal)
-    
-    # 设置滑块范围为 0 到 30，方便映射到 0-3.0 L/min
-    flow_slider.setRange(0, 30)
-    
-    flow_slider.setValue(30) # 默认最大值
-    
-    flow_label = QLabel(f"{flow_slider.value() / 10.0:.1f} L/min")
-    
-    flow_label.setFixedWidth(60) # 给标签一个固定宽度以防抖动
-    
-    flow_layout.addWidget(flow_slider)
-    
-    flow_layout.addWidget(flow_label)
-    
-    # 连接信号，当滑块值改变时更新标签文本
-    flow_slider.valueChanged.connect(
-        lambda value: flow_label.setText(f"{value / 10.0:.1f} L/min")
-    )
-    
-    settings_layout.addRow("造雾量 (0-3 L/min):", flow_widget)
+    def toggle_mist_switch(checked):
+        if checked:
+            mist_switch_btn.setText("开启")
+            mist_switch_btn.setStyleSheet("background-color: #00ff7f; color: black;")
+        else:
+            mist_switch_btn.setText("关闭")
+            mist_switch_btn.setStyleSheet("background-color: #ff3b30; color: white;")
+
+    mist_switch_btn.toggled.connect(toggle_mist_switch)
+    settings_layout.addRow("造雾机状态:", mist_switch_btn)
 
     # 目标位置跟踪
     tracking_check = QCheckBox("启用目标位置跟踪")
-    
-    tracking_check.setChecked(True) # 默认打开
-    
-    settings_layout.addRow("", tracking_check)
 
-    # 跟踪精度
-    accuracy_combo = QComboBox()
-    
-    accuracy_options = [f"±{i * 5}mm" for i in range(1, 11)] # ±5mm to ±50mm
-    
-    accuracy_combo.addItems(accuracy_options)
-    
-    accuracy_combo.setCurrentText("±5mm")
-    
-    settings_layout.addRow("跟踪精度:", accuracy_combo)
+    tracking_check.setChecked(True)  # 默认打开
+
+    settings_layout.addRow("", tracking_check)
 
     # --- 2. 状态 Frame ---
     status_group = QGroupBox("状态")
-    
+
     main_layout.addWidget(status_group)
-    
+
     status_layout = QFormLayout(status_group)
-    
+
     status_layout.setLabelAlignment(Qt.AlignRight)
 
+    # 仅保留当前位置
     status_layout.addRow("当前位置:", QLabel("距左侧 1.215 米"))
-    
-    status_layout.addRow("在位:", QLabel("是"))
-    
-    status_layout.addRow("当前流量:", QLabel("3 L/min"))
-    
-    status_layout.addRow("当前阀门开度:", QLabel("90 %"))
-    
-    status_layout.addRow("当前电机转速:", QLabel("3000 rpm"))
-    
-    status_layout.addRow("当前水箱水位:", QLabel("50 %"))
-    
-    status_layout.addRow("当前补水阀门:", QLabel("开"))
 
     main_layout.addStretch(1)
 
-    return create_styled_dock(main_window, "示踪设置", content, is_independent=True)
+    return create_styled_dock(main_window, "示踪设置", content, is_independent=False)
 
 
 def create_motion_capture_dock(main_window):
+    """
+    创建动捕设置Dock。
+    修改：去掉视图设置中的所有子界面和视图设置。
+    """
     content = QWidget()
     main_layout = QVBoxLayout(content)
     main_layout.setSpacing(10)
-    # 1. 视图设置 GroupBox
-    view_group = QGroupBox("视图设置")
-    view_layout = QVBoxLayout(view_group)
-    
-    view_mode_layout = QHBoxLayout()
-    view_mode_layout.addWidget(QLabel("视图模式:"))
-    view_mode_combo = QComboBox()
-    view_mode_combo.addItems(["目标点图", "原始灰度图", "阈值/分割图"])
-    view_mode_layout.addWidget(view_mode_combo)
-    
-    open_view_button = QPushButton("打开视场")
-    # 连接到主窗口的新方法
-    open_view_button.clicked.connect(main_window.show_motion_capture_view)
-    
-    view_layout.addLayout(view_mode_layout)
-    view_layout.addWidget(open_view_button)
-    main_layout.addWidget(view_group)
-    # 2. 动捕状态 GroupBox
+
+    # 动捕状态 GroupBox
     status_group = QGroupBox("动捕状态")
     status_layout = QVBoxLayout(status_group)
-    
+
     status_grid_widget = QWidget()
     grid_layout = QGridLayout(status_grid_widget)
     grid_layout.setSpacing(5)
     grid_layout.setContentsMargins(0, 5, 0, 5)
-    
+
     main_window.camera_status_lights = []
     num_cameras = 20
-    cols = 5 # 每行5个，更紧凑
+    cols = 5  # 每行5个，更紧凑
     for i in range(1, num_cameras + 1):
         light = CameraStatusLight(i)
         light.clicked.connect(main_window.show_camera_settings)
         main_window.camera_status_lights.append(light)
-        
+
         row = (i - 1) // cols
         col = (i - 1) % cols
         grid_layout.addWidget(light, row, col)
-        
+
     status_layout.addWidget(status_grid_widget)
-    # 3. 添加说明文字
+    # 添加说明文字
     legend_label = QLabel(
         "绿色: 已连接，同步正常\n"
         "黄色: 已连接，存在警告\n"
         "红色: 连接断开或错误"
     )
-    legend_label.setStyleSheet("color: #8a8f98; font-size: 9px;") # 淡灰色小字体
+    legend_label.setStyleSheet("color: #8a8f98; font-size: 9px;")  # 淡灰色小字体
     status_layout.addWidget(legend_label)
     main_layout.addWidget(status_group)
     main_layout.addStretch()
-    dock = create_styled_dock(main_window, "动捕设置", content, 
-                              min_size_from_content=False, is_independent=True)
-    dock.resize(300, 420) # 调整尺寸以适应新布局
+    dock = create_styled_dock(main_window, "动捕设置", content,
+                              min_size_from_content=False, is_independent=False)
+    dock.resize(300, 350)  # 调整尺寸以适应新布局
     return dock
 def create_motion_capture_view_dock(main_window):
     # 使用 BackgroundWidget 作为内容
     content = BackgroundWidget("动捕.png", 1.0) # 1.0 不透明度
     dock = create_styled_dock(main_window, "动捕实时视场", content,
-                              min_size_from_content=False, is_independent=True)
+                              min_size_from_content=False, is_independent=False)
     dock.resize(1265, 685)
     return dock
 def create_calibration_dock(main_window):
@@ -1410,7 +1481,7 @@ def create_calibration_dock(main_window):
     layout.addWidget(QPushButton("加载标定文件"))
     layout.addWidget(QPushButton("保存标定文件"))
     layout.addStretch()
-    return create_styled_dock(main_window, "标定设置", content, is_independent=True)
+    return create_styled_dock(main_window, "标定设置", content, is_independent=False)
 
 # ui_docks.py
 
@@ -1731,10 +1802,10 @@ def create_simulation_dock(main_window):
     
     update_calculations()
 
-    dock = create_styled_dock(main_window, "仿真设置", content, is_independent=True)
-    
+    dock = create_styled_dock(main_window, "仿真设置", content, is_independent=False)
+
     dock.resize(800, 600)
-    
+
     return dock
 
 
@@ -1859,14 +1930,74 @@ def create_simulation_dock(main_window):
     
     update_calculations()
 
-    dock = create_styled_dock(main_window, "仿真设置", content, is_independent=True)
-    
+    dock = create_styled_dock(main_window, "仿真设置", content, is_independent=False)
+
     dock.resize(800, 600)
-    
+
     return dock
 
 
 def create_training_dock(main_window):
-    content = QLabel("AI模型训练数据接口状态...")
-    content.setAlignment(Qt.AlignCenter)
-    return create_styled_dock(main_window, "训练设置", content, is_independent=True)
+    """
+    创建训练设置Dock。
+    修改：增加一个按钮，点击后输出风速数据、传感器数据和动捕的所有数据。
+    """
+    content = QWidget()
+    layout = QVBoxLayout(content)
+    layout.setSpacing(15)
+
+    # 状态标签
+    status_label = QLabel("AI模型训练数据接口状态...")
+    status_label.setAlignment(Qt.AlignCenter)
+    layout.addWidget(status_label)
+
+    # 数据输出按钮
+    output_data_btn = QPushButton("输出训练数据")
+
+    def output_training_data():
+        """输出训练数据到控制台"""
+        print("\n" + "="*60)
+        print("训练数据输出 - " + QDateTime.currentDateTime().toString("yyyy-MM-dd HH:mm:ss"))
+        print("="*60)
+
+        # 1. 输出风速数据
+        print("\n【风速数据】")
+        import random
+        num_sensors = 64
+        for i in range(num_sensors):
+            speed = random.uniform(0, 30)
+            print(f"  传感器 {i+1:02d}: {speed:.2f} m/s")
+
+        # 2. 输出传感器数据（温度、湿度、气压等）
+        print("\n【传感器数据】")
+        print(f"  环境温度: {random.uniform(10, 35):.1f} °C")
+        print(f"  环境湿度: {random.uniform(30, 80):.1f} RH%")
+        print(f"  大气压力: {random.uniform(95, 105):.1f} kPa")
+        print(f"  空气密度: {random.uniform(1.1, 1.3):.3f} kg/m³")
+
+        # 3. 输出动捕数据（所有相机数据）
+        print("\n【动捕数据】")
+        for camera_id in range(1, 21):
+            if camera_id in main_window.camera_data:
+                data = main_window.camera_data[camera_id]
+                print(f"  相机 {camera_id:02d}:")
+                print(f"    状态: {data['status']}")
+                print(f"    IP地址: {data['ip']}")
+                print(f"    帧率: {data['framerate']} fps")
+                print(f"    分辨率: {data['resolution']}")
+                print(f"    曝光: {data['exposure']}")
+                print(f"    阈值: {data['threshold']}")
+
+        print("\n" + "="*60)
+        print("数据输出完成")
+        print("="*60 + "\n")
+
+        # 记录到系统日志
+        main_window.add_system_log("信息", "训练", "已输出训练数据（风速、传感器、动捕）")
+
+    output_data_btn.clicked.connect(output_training_data)
+    layout.addWidget(output_data_btn)
+
+    layout.addStretch()
+
+    return create_styled_dock(main_window, "训练设置", content, is_independent=False)

@@ -89,32 +89,26 @@ class BackgroundWidget(QWidget):
 
 class DraggableFrame(QFrame):
     visibilityChanged = Signal(bool)
-    
-    # --- MODIFIED: Added is_independent_window parameter ---
+
     def __init__(self, title, parent=None, is_independent_window=False):
         super().__init__(parent)
-        
-        # --- MODIFIED: Set window flag if it's an independent window ---
-        if is_independent_window:
-            # 使用 Qt.Dialog 标志，它是一个顶级窗口，但仍能保持与父窗口的关联。
-            # Qt.FramelessWindowHint 移除原生边框。
-            self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
-            # 这一行非常重要，它确保了窗口在任务栏上没有自己的独立图标，
-            # 感觉更像是主程序的“一部分”，而不是一个全新的程序。
-            self.setWindowModality(Qt.NonModal)
-        else:
-            # 对于嵌入式窗口，确保它没有窗口标志，只是一个普通的Frame
-            self.setWindowFlags(Qt.Widget)
+
+        self._is_independent_window = is_independent_window
+        self._original_geometry = None
+        self._visible_before_hide = False
+
+        # 设置为普通Widget，嵌入在父窗口中
+        self.setWindowFlags(Qt.Widget)
         self.setFrameShape(QFrame.StyledPanel)
 
         self.setFrameShape(QFrame.StyledPanel)
-        
+
         self.m_drag = False
         self.m_resize = False
         self.m_drag_position = QPoint()
         self.m_start_geometry = QRect()
         self.m_start_mouse_pos = QPoint()
-        
+
         self.m_resizing_left = False
         self.m_resizing_right = False
         self.m_resizing_top = False
@@ -129,12 +123,12 @@ class DraggableFrame(QFrame):
         title_bar_widget = QWidget()
         self.title_bar_layout = QHBoxLayout(title_bar_widget)
         self.title_bar_layout.setContentsMargins(8, 0, 4, 0)
-        
+
         self.title_label = QLabel(title)
-        
+
         self.close_button = QPushButton("×")
         self.close_button.setFixedSize(22, 22)
-        
+
         self.title_bar_layout.addWidget(self.title_label)
         self.title_bar_layout.addStretch()
         self.title_bar_layout.addWidget(self.close_button)
@@ -173,10 +167,13 @@ class DraggableFrame(QFrame):
         self.setMinimumSize(min_w, min_h)
 
     def showEvent(self, event):
+        """当dock显示时，发射可见性改变信号并标记为可见"""
         super().showEvent(event)
         self.visibilityChanged.emit(True)
+        self._visible_before_hide = True
 
     def hideEvent(self, event):
+        """当dock被隐藏时，发射可见性改变信号"""
         super().hideEvent(event)
         self.visibilityChanged.emit(False)
 
@@ -270,55 +267,114 @@ class DraggableFrame(QFrame):
         self.setCursor(Qt.ArrowCursor)
         event.accept()
 
-# ... (The rest of the file remains unchanged) ...
 class OverallHealthIndicator(QWidget):
-    # ... (代码与之前版本完全相同)
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setMinimumHeight(30)
+        self.setMinimumHeight(100)
         self._device_on = True
         self.text_color = QColor("#e1e1e6")
+
+        # 初始化子系统状态：风机、造雨、示踪、动捕
+        # 状态：0=待机(黄色), 1=运行(绿色), 2=故障(红色)
+        self.subsystem_status = {
+            "风机": 0,
+            "造雨": 0,
+            "示踪": 0,
+            "动捕": 0
+        }
 
     def set_device_status(self, is_on):
         self._device_on = is_on
         self.update()
 
+    def set_subsystem_status(self, subsystem, status):
+        """设置子系统状态
+        Args:
+            subsystem: 子系统名称 (风机/造雨/示踪/动捕)
+            status: 0=待机(黄色), 1=运行(绿色), 2=故障(红色)
+        """
+        if subsystem in self.subsystem_status:
+            self.subsystem_status[subsystem] = status
+            self.update()
+
     def set_text_color(self, color):
         self.text_color = QColor(color)
         self.update()
 
+    def _get_status_color(self, status):
+        """获取状态对应的颜色"""
+        if status == 0:
+            return "#FFFF00"  # 黄色 - 待机
+        elif status == 1:
+            return "#00FF00"  # 绿色 - 运行
+        else:
+            return "#FF0000"  # 红色 - 故障
+
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
-        
+
+        # 主系统状态显示
         if self._device_on:
             color = "#00ff7f"
-            text = "系统正常"
+            text = "系统开机"
         else:
             color = "#FFFFFF" if self.text_color.lightness() < 128 else "#5e626a"
-            text = "系统关机"
-            
+            text = "系统待机"
+
+        # 绘制主状态指示灯
         pen = QPen(QColor(color), 3)
         painter.setPen(pen)
         painter.drawEllipse(2, 6, 18, 18)
-        
+
         brush = QBrush(QColor(color))
         painter.setBrush(brush)
         painter.setPen(Qt.NoPen)
         painter.drawEllipse(5, 9, 12, 12)
-        
+
         painter.setPen(QPen(self.text_color))
         font = QFont("Inter", 18, QFont.Bold)
         painter.setFont(font)
         painter.drawText(30, 22, text)
 
+        # 绘制底部分隔线
+        painter.setPen(QPen(QColor("#404448"), 1))
+        painter.drawLine(10, 35, self.width() - 10, 35)
+
+        # 绘制底部子系统状态
+        subsystem_start_y = 45
+        subsystem_spacing = 50
+        start_x = 10
+
+        for i, (name, status) in enumerate(self.subsystem_status.items()):
+            x = start_x + i * subsystem_spacing
+
+            # 绘制子系统状态灯（绿红黄）
+            status_color = self._get_status_color(status)
+
+            # 外圈
+            painter.setPen(QPen(QColor(status_color), 2))
+            painter.drawEllipse(x, subsystem_start_y, 14, 14)
+
+            # 内圈实心
+            painter.setBrush(QBrush(QColor(status_color)))
+            painter.setPen(Qt.NoPen)
+            painter.drawEllipse(x + 3, subsystem_start_y + 3, 8, 8)
+
+            # 绘制名称
+            painter.setPen(QPen(self.text_color))
+            font = QFont("Inter", 9)
+            painter.setFont(font)
+            painter.drawText(x - 5, subsystem_start_y + 28, name)
+
 class CommunicationStatusIndicator(QWidget):
-    # ... (代码与之前版本完全相同)
     def __init__(self, name, online, total, speed, parent=None):
         super().__init__(parent)
         self.name = name
         self.total = total
         self.setMinimumWidth(80)
+        self.setMinimumHeight(90)
+        self.setMouseTracking(True)  # 启用鼠标追踪以支持悬停事件
         layout = QVBoxLayout(self)
         layout.setSpacing(2)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -327,28 +383,67 @@ class CommunicationStatusIndicator(QWidget):
         self.speed_label = QLabel(f"({speed}ms)", self)
         self.status_light = QLabel(self)
         self.status_light.setFixedSize(10, 10)
-        
+
+        # 问题部件编号标签
+        self.issue_label = QLabel("", self)
+        self.issue_label.setStyleSheet("color: #ff6b6b; font-size: 9px;")
+        self.issue_label.setAlignment(Qt.AlignCenter)
+
         self.name_label.setAlignment(Qt.AlignCenter)
         self.count_label.setAlignment(Qt.AlignCenter)
         self.speed_label.setAlignment(Qt.AlignCenter)
-        
+
         layout.addWidget(self.name_label)
         layout.addWidget(self.status_light, 0, Qt.AlignCenter)
         layout.addWidget(self.count_label)
         layout.addWidget(self.speed_label)
+        layout.addWidget(self.issue_label)
+
+        # 存储有问题的部件编号
+        self.problematic_units = []
 
     def update_status(self, is_on):
         if is_on:
             self.status_light.setStyleSheet("background-color: #00ff7f; border-radius: 5px;")
             self.count_label.setText(f"{self.total}/{self.total}")
             self.speed_label.setText("(---ms)")
+            self.issue_label.setText("")
+            self.problematic_units = []
         else:
             self.status_light.setStyleSheet("background-color: #ff3b30; border-radius: 5px;")
             self.count_label.setText(f"0/{self.total}")
             self.speed_label.setText("(N/A)")
+            # 模拟随机问题部件（仅用于演示）
+            import random
+            if self.name == "电驱":
+                num_issues = random.randint(1, 5)
+                self.problematic_units = random.sample(range(100), num_issues)
+                self.issue_label.setText(f"问题: {len(self.problematic_units)}个")
+
+    def set_problematic_units(self, unit_list):
+        """设置有问题的部件编号列表"""
+        self.problematic_units = unit_list
+        if unit_list:
+            self.issue_label.setText(f"问题: {len(unit_list)}个")
+        else:
+            self.issue_label.setText("")
 
     def set_speed(self, speed_ms_str):
         self.speed_label.setText(f"({speed_ms_str}ms)")
+
+    def mouseMoveEvent(self, event):
+        """鼠标悬停时显示弹窗"""
+        if self.problematic_units:
+            from PySide6.QtWidgets import QToolTip
+            tooltip_text = f"{self.name} - 问题部件编号:\n" + ", ".join(map(str, self.problematic_units))
+            QToolTip.showText(event.globalPosition().toPoint(), tooltip_text, self)
+        super().mouseMoveEvent(event)
+
+    def leaveEvent(self, event):
+        """鼠标离开时隐藏弹窗"""
+        from PySide6.QtWidgets import QToolTip
+        QToolTip.hideText()
+        super().leaveEvent(event)
 
 class EnvironmentDisplay(QWidget):
     # ... (代码与之前版本完全相同)
