@@ -39,7 +39,8 @@
       "Bash(\"D:\\\\ProgramData\\\\Anaconda3\\\\envs\\\\my_env\\\\python.exe\" \"F:\\\\A-User\\\\cliff\\\\frist\\\\frist\\\\hardware\\\\fan_control\\\\test_100_boards.py\")",
       "Bash(\"D:\\\\ProgramData\\\\Anaconda3\\\\envs\\\\my_env\\\\python.exe\" -c \"\nimport sys\nsys.path.insert\\(0, r''F:\\\\A-User\\\\cliff\\\\frist\\\\frist''\\)\nfrom hardware.fan_control import create_batch_controller\n\n# 创建100个板子的控制器\nprint\\(''创建100个板子的批量控制器...''\\)\nbatch_ctrl = create_batch_controller\\(\n    board_count=100,\n    base_ip=''192.168.2.'',\n    start_ip=1,\n    fans_per_board=16\n\\)\n\nprint\\(f''板子数量: {batch_ctrl.board_count}''\\)\nprint\\(f''总风扇数: {batch_ctrl.board_count * 16}''\\)\nprint\\(f''IP范围: 192.168.2.1 - 192.168.2.100''\\)\nprint\\(\\)\n\n# 显示前10个和后10个板子\nprint\\(''前10个板子:''\\)\nfor i in range\\(10\\):\n    config = batch_ctrl.board_configs[i]\n    print\\(f''  板子#{i+1:3d}: {config.device_ip}''\\)\n\nprint\\(''...''\\)\nprint\\(''后10个板子:''\\)\nfor i in range\\(90, 100\\):\n    config = batch_ctrl.board_configs[i]\n    print\\(f''  板子#{i+1:3d}: {config.device_ip}''\\)\n\nprint\\(\\)\nprint\\(''日志已生成，记录了100个板子的配置信息''\\)\n\")",
       "Bash(\"D:\\\\ProgramData\\\\Anaconda3\\\\envs\\\\my_env\\\\python.exe\" -c \"\nimport sys\nsys.path.insert\\(0, r''F:\\\\A-User\\\\cliff\\\\frist\\\\frist''\\)\nfrom hardware.fan_control.pwm_csv_recorder import create_demo_csv_recording\n\n# 运行演示 - 记录100个板子的PWM值，持续10秒\ncsv_file = create_demo_csv_recording\\(\n    duration=10.0,   # 记录10秒\n    interval=0.1,    # 每0.1秒记录一次\n    board_count=100  # 100个板子\n\\)\n\nprint\\(f''\\\\n演示完成！''\\)\nprint\\(f''CSV文件: {csv_file}''\\)\nprint\\(f''记录了100个板子 × 16个风扇 = 1600个风扇的PWM值''\\)\nprint\\(f''每0.1秒记录一次，持续10秒，共约100行数据''\\)\n\")",
-      "Bash(tree:*)"
+      "Bash(tree:*)",
+      "mcp__zai-mcp-server__analyze_image"
     ],
     "deny": [],
     "ask": []

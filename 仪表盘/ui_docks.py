@@ -942,6 +942,7 @@ def create_combined_pitch_rain_trace_dock(main_window):
     pitch_layout.addWidget(pitch_control_group)
     pitch_control_layout = QFormLayout(pitch_control_group)
     pitch_control_layout.setLabelAlignment(Qt.AlignRight)
+    pitch_control_layout.setVerticalSpacing(20)  # 增加行间距到20
 
     # 目标角度输入 - 精度0.1°
     pitch_angle_spin = QDoubleSpinBox()
@@ -971,14 +972,34 @@ def create_combined_pitch_rain_trace_dock(main_window):
 
     pitch_execute_btn.clicked.connect(on_pitch_execute)
 
+    # 为俯仰控制设置标签字体
+    from PySide6.QtGui import QFont
+    pitch_label_font = QFont()
+    pitch_label_font.setPointSize(12)  # 标签字体
+
+    # 更新目标角度标签
+    pitch_angle_label = QLabel("目标角度 (-45° to +90°):")
+    pitch_angle_label.setFont(pitch_label_font)
+    # 移除旧的行并添加新的
+    pitch_control_layout.addRow(pitch_angle_label, pitch_control_row)
+
     # 俯仰状态
     pitch_status_group = QGroupBox("状态")
     pitch_layout.addWidget(pitch_status_group)
     pitch_status_layout = QFormLayout(pitch_status_group)
     pitch_status_layout.setLabelAlignment(Qt.AlignRight)
-    pitch_status_layout.addRow("当前速度:", QLabel("0 °/s"))
-    pitch_status_layout.addRow("当前角度:", QLabel("0 °"))
-    pitch_status_layout.addRow("到位检测:", QLabel("到位"))
+    pitch_status_layout.setVerticalSpacing(20)  # 增加行间距到20
+
+    # 为俯仰状态设置标签字体
+    from PySide6.QtGui import QFont
+    pitch_status_label_font = QFont()
+    pitch_status_label_font.setPointSize(12)
+    pitch_status_value_font = QFont()
+    pitch_status_value_font.setPointSize(11)
+
+    pitch_status_layout.addRow(QLabel("当前速度:", font=pitch_status_label_font), QLabel("0 °/s", font=pitch_status_value_font))
+    pitch_status_layout.addRow(QLabel("当前角度:", font=pitch_status_label_font), QLabel("0 °", font=pitch_status_value_font))
+    pitch_status_layout.addRow(QLabel("到位检测:", font=pitch_status_label_font), QLabel("到位", font=pitch_status_value_font))
 
     pitch_layout.addStretch(1)
     content.addTab(pitch_content, "俯仰")
@@ -993,18 +1014,27 @@ def create_combined_pitch_rain_trace_dock(main_window):
     rain_layout.addWidget(rain_control_group)
     rain_control_layout = QFormLayout(rain_control_group)
     rain_control_layout.setLabelAlignment(Qt.AlignRight)
-    rain_control_layout.setVerticalSpacing(18)  # 增加行间距到18，防止文字显示不全
+    rain_control_layout.setVerticalSpacing(25)  # 增加行间距到25，让文字更清晰
 
     # 定义字体样式
     from PySide6.QtGui import QFont
+    # 标签字体（左侧标签）
+    label_font = QFont()
+    label_font.setPointSize(12)  # 标签字体大小
+    # 控件字体（右侧控件）
     control_font = QFont()
-    control_font.setPointSize(10)  # 控制界面字体大小
+    control_font.setPointSize(11)  # 控制界面字体大小
     status_font = QFont()
-    status_font.setPointSize(9)  # 状态界面字体大小（更小）
+    status_font.setPointSize(11)  # 状态界面字体大小
     button_font = QFont()
-    button_font.setPointSize(10)
+    button_font.setPointSize(11)  # 按钮字体大小
 
-    rain_control_layout.addRow("水泵:", QPushButton("开关"))
+    # 水泵按钮
+    pump_button = QPushButton("开关")
+    pump_button.setFont(button_font)
+    pump_label = QLabel("水泵:")
+    pump_label.setFont(label_font)
+    rain_control_layout.addRow(pump_label, pump_button)
 
     # 流量设置 - 增加输入框宽度
     rain_flow_widget = QWidget()
@@ -1015,7 +1045,13 @@ def create_combined_pitch_rain_trace_dock(main_window):
     rain_flow_slider = QSlider(Qt.Horizontal)
     rain_flow_slider.setRange(0, 120)
     rain_flow_slider.setValue(120)
-    rain_flow_label = QLabel(f"{rain_flow_slider.value() / 10.0:.1f} m³/h")
+    rain_flow_label = QLabel()
+    rain_flow_label.setTextFormat(Qt.RichText)  # 支持HTML格式
+
+    def update_flow_label(value):
+        rain_flow_label.setText(f"{value / 10.0:.1f} m<sup>3</sup>/h")
+
+    update_flow_label(rain_flow_slider.value())
     rain_flow_label.setFixedWidth(75)  # 增加宽度
     rain_flow_label.setFont(control_font)  # 设置字体
     rain_flow_layout.addWidget(rain_flow_slider)
@@ -1029,32 +1065,38 @@ def create_combined_pitch_rain_trace_dock(main_window):
 
     or_label = QLabel("或直接输入:")
     or_label.setFont(control_font)
-    unit_label = QLabel("m³/h")
+    unit_label = QLabel("m<sup>3</sup>/h")
+    unit_label.setTextFormat(Qt.RichText)
     unit_label.setFont(control_font)
 
     rain_flow_layout.addWidget(or_label)
     rain_flow_layout.addWidget(rain_flow_input)
     rain_flow_layout.addWidget(unit_label)
 
-    rain_flow_slider.valueChanged.connect(
-        lambda v: rain_flow_label.setText(f"{v / 10.0:.1f} m³/h")
-    )
+    rain_flow_slider.valueChanged.connect(update_flow_label)
 
-    rain_control_layout.addRow("流量 (0-12 m³/h):", rain_flow_widget)
+    # 流量标签
+    flow_label_text = QLabel("流量 (0-12 m³/h):")
+    flow_label_text.setFont(label_font)
+    rain_control_layout.addRow(flow_label_text, rain_flow_widget)
 
     # 雨量选择
     rain_level_combo = QComboBox()
     rain_level_combo.addItems(["微雨", "小雨", "中雨", "大雨", "暴雨", "大暴雨", "特大暴雨"])
     rain_level_combo.setCurrentText("特大暴雨")
     rain_level_combo.setFont(control_font)
-    rain_control_layout.addRow("雨量选择:", rain_level_combo)
+    rain_level_label = QLabel("雨量选择:")
+    rain_level_label.setFont(label_font)
+    rain_control_layout.addRow(rain_level_label, rain_level_combo)
 
     # 喷嘴类型 (A/B/C)
     rain_nozzle_type_combo = QComboBox()
     rain_nozzle_type_combo.addItems(["类型A", "类型B", "类型C"])
     rain_nozzle_type_combo.setCurrentText("类型A")
     rain_nozzle_type_combo.setFont(control_font)
-    rain_control_layout.addRow("喷嘴类型:", rain_nozzle_type_combo)
+    nozzle_label = QLabel("喷嘴类型:")
+    nozzle_label.setFont(label_font)
+    rain_control_layout.addRow(nozzle_label, rain_nozzle_type_combo)
 
     rain_max_rain_check = QCheckBox("瞬时最大降雨")
     rain_max_rain_check.setChecked(True)
@@ -1066,19 +1108,27 @@ def create_combined_pitch_rain_trace_dock(main_window):
     rain_layout.addWidget(rain_status_group)
     rain_status_layout = QFormLayout(rain_status_group)
     rain_status_layout.setLabelAlignment(Qt.AlignRight)
-    rain_status_layout.setVerticalSpacing(12)  # 增加行间距
+    rain_status_layout.setVerticalSpacing(20)  # 增加行间距到20，让文字更清晰
 
-    # 状态标签 - 使用更小的字体
+    # 状态标签 - 使用label_font
     status_labels = []
     for text in ["瞬时最大:", "当前流量:", "当前电机转速:", "当前水箱水位:", "当前补水阀门:"]:
         label = QLabel(text)
-        label.setFont(status_font)  # 使用更小的状态字体
+        label.setFont(label_font)  # 使用标签字体
         status_labels.append(label)
 
     value_labels = []
-    for text in ["是", "12 m³/h", "3000 rpm", "60 %", "开"]:
+
+    # 当前流量值使用HTML格式显示上标
+    flow_value_label = QLabel("12 m<sup>3</sup>/h")
+    flow_value_label.setTextFormat(Qt.RichText)
+    flow_value_label.setFont(status_font)
+    value_labels.append(flow_value_label)
+
+    # 其他值标签
+    for text in ["是", "3000 rpm", "60 %", "开"]:
         label = QLabel(text)
-        label.setFont(status_font)  # 使用更小的状态字体
+        label.setFont(status_font)  # 状态值字体
         value_labels.append(label)
 
     rain_status_layout.addRow(status_labels[0], value_labels[0])
@@ -1100,10 +1150,18 @@ def create_combined_pitch_rain_trace_dock(main_window):
     trace_layout.addWidget(trace_settings_group)
     trace_settings_layout = QFormLayout(trace_settings_group)
     trace_settings_layout.setLabelAlignment(Qt.AlignRight)
+    trace_settings_layout.setVerticalSpacing(20)  # 增加行间距到20
+
+    # 为示踪设置标签字体
+    from PySide6.QtGui import QFont
+    trace_label_font = QFont()
+    trace_label_font.setPointSize(12)
 
     # 造雾机开关状态
     trace_mist_switch = QPushButton("开关")
-    trace_settings_layout.addRow("造雾机:", trace_mist_switch)
+    trace_mist_label = QLabel("造雾机:")
+    trace_mist_label.setFont(trace_label_font)
+    trace_settings_layout.addRow(trace_mist_label, trace_mist_switch)
 
     # 目标位置跟踪
     trace_tracking_check = QCheckBox("启用目标位置跟踪")
@@ -1115,9 +1173,14 @@ def create_combined_pitch_rain_trace_dock(main_window):
     trace_layout.addWidget(trace_status_group)
     trace_status_layout = QFormLayout(trace_status_group)
     trace_status_layout.setLabelAlignment(Qt.AlignRight)
-    trace_status_layout.addRow("当前位置:", QLabel("距左侧 1.215 米"))
-    trace_status_layout.addRow("造雾机状态:", QLabel("关闭"))
-    trace_status_layout.addRow("在位:", QLabel("是"))
+    trace_status_layout.setVerticalSpacing(20)  # 增加行间距到20
+
+    trace_status_value_font = QFont()
+    trace_status_value_font.setPointSize(11)
+
+    trace_status_layout.addRow(QLabel("当前位置:", font=trace_label_font), QLabel("距左侧 1.215 米", font=trace_status_value_font))
+    trace_status_layout.addRow(QLabel("造雾机状态:", font=trace_label_font), QLabel("关闭", font=trace_status_value_font))
+    trace_status_layout.addRow(QLabel("在位:", font=trace_label_font), QLabel("是", font=trace_status_value_font))
 
     trace_layout.addStretch(1)
     content.addTab(trace_content, "示踪")
@@ -1279,12 +1342,16 @@ def create_rain_dock(main_window):
 
     flow_slider.setValue(120)  # 默认最大值
 
-    flow_label = QLabel(f"{flow_slider.value() / 10.0:.1f} m³/h")
+    flow_label = QLabel()
+    flow_label.setTextFormat(Qt.RichText)  # 支持HTML格式
 
+    def update_rain_flow_label(value):
+        flow_label.setText(f"{value / 10.0:.1f} m<sup>3</sup>/h")
+
+    update_rain_flow_label(flow_slider.value())
     flow_label.setFixedWidth(70)  # 给标签一个固定宽度以防抖动
 
     flow_layout.addWidget(flow_slider)
-
     flow_layout.addWidget(flow_label)
 
     # 流量输入框
@@ -1293,12 +1360,14 @@ def create_rain_dock(main_window):
     flow_input.setValidator(QDoubleValidator(0.0, 12.0, 1))
     flow_layout.addWidget(QLabel("或直接输入:"))
     flow_layout.addWidget(flow_input)
-    flow_layout.addWidget(QLabel("m³/h"))
+
+    # 单位标签使用HTML格式
+    unit_label_rain = QLabel("m<sup>3</sup>/h")
+    unit_label_rain.setTextFormat(Qt.RichText)
+    flow_layout.addWidget(unit_label_rain)
 
     # 连接信号，当滑块值改变时更新标签文本
-    flow_slider.valueChanged.connect(
-        lambda value: flow_label.setText(f"{value / 10.0:.1f} m³/h")
-    )
+    flow_slider.valueChanged.connect(update_rain_flow_label)
 
     control_layout.addRow("流量 (0-12 m³/h):", flow_widget)
 
@@ -1343,7 +1412,10 @@ def create_rain_dock(main_window):
 
     status_layout.addRow("瞬时最大:", QLabel("是"))
 
-    status_layout.addRow("当前流量:", QLabel("12 m³/h"))
+    # 当前流量使用HTML格式显示上标
+    current_flow_label = QLabel("12 m<sup>3</sup>/h")
+    current_flow_label.setTextFormat(Qt.RichText)
+    status_layout.addRow("当前流量:", current_flow_label)
 
     # 去掉阀门开度
     status_layout.addRow("当前电机转速:", QLabel("3000 rpm"))

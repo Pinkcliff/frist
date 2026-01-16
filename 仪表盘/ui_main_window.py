@@ -71,44 +71,96 @@ class GlobalDashboardWindow(QMainWindow):
             old_state = event.oldState()
             new_state = self.windowState()
 
-            # 即将最小化时，保存所有dock的可见性状态
+            # 即将最小化时，保存所有dock的完整状态
             if (new_state & Qt.WindowMinimized) and not (old_state & Qt.WindowMinimized):
                 debug.log_debug("[changeEvent] 主窗口即将最小化，保存所有dock状态")
                 self._save_docks_visibility()
 
-            # 从最小化恢复时，恢复所有dock的状态
+            # 从最小化恢复时，延迟恢复所有dock的状态
             elif (old_state & Qt.WindowMinimized) and not (new_state & Qt.WindowMinimized):
-                debug.log_debug("[changeEvent] 主窗口从最小化恢复，恢复所有dock状态")
-                self._restore_docks_visibility()
+                debug.log_debug("[changeEvent] 主窗口从最小化恢复，准备恢复所有dock状态")
+                # 使用定时器延迟执行，确保窗口完全恢复后再操作dock
+                QTimer.singleShot(50, self._restore_docks_visibility)
 
         super().changeEvent(event)
 
     def _save_docks_visibility(self):
-        """主窗口最小化时，保存所有dock的可见性状态"""
-        self._docks_visibility_before_minimize = {}
+        """主窗口最小化时，保存所有dock的完整状态（位置、大小、可见性）"""
+        self._docks_state_before_minimize = {}
         for name, dock in self.docks.items():
             if dock:
-                # 保存每个dock的可见性状态
-                self._docks_visibility_before_minimize[name] = dock.isVisible()
-                debug.log_debug(f"  保存dock状态: {name} -> {dock.isVisible()}")
+                # 使用_visible_before_hide属性来判断dock原本是否可见
+                # 因为最小化时Qt已经自动隐藏了所有子窗口，isVisible()会返回False
+                was_visible = getattr(dock, '_visible_before_hide', False)
+                self._docks_state_before_minimize[name] = {
+                    'visible': was_visible,
+                    'x': dock.x(),
+                    'y': dock.y(),
+                    'width': dock.width(),
+                    'height': dock.height()
+                }
+                debug.log_debug(f"  保存dock状态: {name} -> visible={was_visible}, pos=({dock.x()}, {dock.y()}), size=({dock.width()}, {dock.height()})")
 
     def _restore_docks_visibility(self):
-        """主窗口恢复时，恢复所有dock到最小化前的状态"""
-        if not hasattr(self, '_docks_visibility_before_minimize'):
+        """主窗口恢复时，恢复所有dock到最小化前的完整状态（位置、大小、可见性）"""
+        debug.log_debug("[_restore_docks_visibility] 开始恢复dock状态")
+
+        if not hasattr(self, '_docks_state_before_minimize'):
             debug.log_debug("  没有保存的状态，使用默认行为")
             self._restore_all_docks_visibility()
             return
 
+        debug.log_debug(f"  已保存的dock数量: {len(self._docks_state_before_minimize)}")
+        for name, state in self._docks_state_before_minimize.items():
+            debug.log_debug(f"    {name}: visible={state['visible']}, pos=({state['x']}, {state['y']}), size=({state['width']}, {state['height']})")
+
         for name, dock in self.docks.items():
-            if dock and name in self._docks_visibility_before_minimize:
-                was_visible = self._docks_visibility_before_minimize[name]
-                if was_visible:
+            if dock and name in self._docks_state_before_minimize:
+                state = self._docks_state_before_minimize[name]
+                # 先设置位置和大小
+                dock.move(state['x'], state['y'])
+                dock.resize(state['width'], state['height'])
+                # 然后根据可见性显示或隐藏
+                if state['visible']:
                     dock.show()
                     dock.raise_()
-                    debug.log_debug(f"  恢复显示dock: {name}")
+                    debug.log_debug(f"  ✓ 恢复dock: {name} -> pos=({state['x']}, {state['y']}), size=({state['width']}, {state['height']})")
                 else:
                     dock.hide()
-                    debug.log_debug(f"  保持隐藏dock: {name}")
+                    debug.log_debug(f"  ✗ 保持隐藏dock: {name}")
+            else:
+                if dock:
+                    debug.log_debug(f"  ! dock '{name}' 没有保存的状态")
+
+        # 强制刷新界面
+        self.update()
+
+    def _update_dock_geometry(self, dock):
+        """当dock被拖动或调整大小时，更新保存的状态"""
+        # 找到对应的dock名称
+        dock_name = None
+        for name, d in self.docks.items():
+            if d is dock:
+                dock_name = name
+                break
+
+        if dock_name:
+            # 确保_docks_state_before_minimize存在
+            if not hasattr(self, '_docks_state_before_minimize'):
+                self._docks_state_before_minimize = {}
+
+            # 使用_visible_before_hide来判断dock是否可见
+            was_visible = getattr(dock, '_visible_before_hide', False)
+
+            # 更新保存的状态中的位置和大小
+            self._docks_state_before_minimize[dock_name] = {
+                'visible': was_visible,
+                'x': dock.x(),
+                'y': dock.y(),
+                'width': dock.width(),
+                'height': dock.height()
+            }
+            debug.log_debug(f"  更新dock位置和大小: {dock_name} -> pos=({dock.x()}, {dock.y()}), size=({dock.width()}, {dock.height()})")
 
     def _restore_all_docks_visibility(self):
         """备用方法：重新显示所有之前标记为可见的dock"""
@@ -314,11 +366,23 @@ class GlobalDashboardWindow(QMainWindow):
         if dock_name not in self.docks:
             return
 
+        target_dock = self.docks[dock_name]
+
+        # 首先检查是否有保存的位置（用户之前拖动过的位置）
+        if hasattr(self, '_docks_state_before_minimize') and dock_name in self._docks_state_before_minimize:
+            state = self._docks_state_before_minimize[dock_name]
+            # 使用保存的位置和大小
+            target_dock.move(state['x'], state['y'])
+            target_dock.resize(state['width'], state['height'])
+            target_dock.show()
+            target_dock.raise_()
+            debug.log_debug(f"  恢复dock到保存的位置: {dock_name} -> pos=({state['x']}, {state['y']})")
+            return
+
+        # 如果没有保存的位置，使用默认的级联定位
         base_pos = QPoint(400, 300)
         offset = QPoint(20, 20)
-        
-        target_dock = self.docks[dock_name]
-        
+
         i = 0
         while True:
             target_pos = base_pos + offset * i
@@ -327,15 +391,15 @@ class GlobalDashboardWindow(QMainWindow):
                 if dock.isVisible() and dock is not target_dock and dock.pos() == target_pos:
                     is_occupied = True
                     break
-            
+
             if not is_occupied:
                 target_dock.move(target_pos)
                 target_dock.show()
                 target_dock.raise_()
                 break
-            
+
             i += 1
-            if i > 50: 
+            if i > 50:
                 target_dock.move(base_pos)
                 target_dock.show()
                 target_dock.raise_()

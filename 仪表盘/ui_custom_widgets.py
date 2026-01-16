@@ -101,8 +101,6 @@ class DraggableFrame(QFrame):
         self.setWindowFlags(Qt.Widget)
         self.setFrameShape(QFrame.StyledPanel)
 
-        self.setFrameShape(QFrame.StyledPanel)
-
         self.m_drag = False
         self.m_resize = False
         self.m_drag_position = QPoint()
@@ -196,7 +194,7 @@ class DraggableFrame(QFrame):
 
     def mouseMoveEvent(self, event: QMouseEvent):
         pos = event.position().toPoint()
-        
+
         if not self.m_resize and not self.m_drag:
             on_left = pos.x() >= 0 and pos.x() <= self.resize_margin
             on_right = pos.x() >= self.width() - self.resize_margin and pos.x() <= self.width()
@@ -258,6 +256,7 @@ class DraggableFrame(QFrame):
             event.accept()
 
     def mouseReleaseEvent(self, event: QMouseEvent):
+        was_dragging = self.m_drag or self.m_resize
         self.m_drag = False
         self.m_resize = False
         self.m_resizing_left = False
@@ -266,6 +265,13 @@ class DraggableFrame(QFrame):
         self.m_resizing_bottom = False
         self.setCursor(Qt.ArrowCursor)
         event.accept()
+
+        # 拖动或调整大小完成后，通知主窗口更新dock的状态
+        if was_dragging and self.parent() and hasattr(self.parent(), 'window'):
+            # 获取主窗口
+            main_window = self.parent().window()
+            if hasattr(main_window, '_update_dock_geometry'):
+                main_window._update_dock_geometry(self)
 
 class OverallHealthIndicator(QWidget):
     def __init__(self, parent=None):
